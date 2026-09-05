@@ -29,6 +29,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "server"))
 
 import db  # noqa: E402
+try:
+    import server.maintenance as maintenance  # noqa: E402
+except ImportError:
+    import maintenance  # noqa: E402
 import onboarding  # noqa: E402
 import parse_api  # noqa: E402
 import passwords  # noqa: E402
@@ -52,6 +56,7 @@ app.add_middleware(
     https_only=os.environ.get("AIFP_ENV") == "production",
     same_site="lax", max_age=60 * 60 * 24 * 30,
 )
+app.add_middleware(maintenance.MaintenanceMiddleware)
 
 
 def current_user(request: Request):
@@ -266,6 +271,20 @@ async def cycle_day(user=Depends(current_user)):
     with db.session() as s:
         payloads = [r.payload for r in db.user_statements(s, user["id"])]
     return onboarding.analyse(payloads)
+
+
+# ── operations & health ─────────────────────────────────────────────────────
+
+@app.get("/api/health")
+@app.get("/api/health/")
+async def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/maintenance")
+@app.get("/api/maintenance/")
+async def maintenance_status():
+    return maintenance.get_maintenance_status_payload()
 
 
 @app.on_event("startup")
