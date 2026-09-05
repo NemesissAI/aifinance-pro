@@ -277,12 +277,16 @@ async def cycle_day(user=Depends(current_user)):
 
 @app.get("/api/health")
 @app.get("/api/health/")
+@app.head("/api/health")
+@app.head("/api/health/")
 async def health():
     return {"status": "ok"}
 
 
 @app.get("/api/maintenance")
 @app.get("/api/maintenance/")
+@app.head("/api/maintenance")
+@app.head("/api/maintenance/")
 async def maintenance_status():
     return maintenance.get_maintenance_status_payload()
 

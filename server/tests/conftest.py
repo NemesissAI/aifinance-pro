@@ -86,17 +86,18 @@ def set_maintenance_mode(
 
 
 def reset_maintenance_mode() -> None:
-    """Reset maintenance mode state to defaults (inactive)."""
+    """Reset maintenance mode runtime override (in-memory state only).
+
+    Does NOT touch environment variables — tests that set MAINTENANCE_MODE
+    via os.environ expect it to survive a reset.  The env-var cleanup belongs
+    in each test's own tearDown.
+    """
     try:
         m = importlib.import_module("server.maintenance")
         if hasattr(m, "reset_maintenance_mode"):
             m.reset_maintenance_mode()
     except (ImportError, AttributeError):
         pass
-
-    os.environ.pop("MAINTENANCE_MODE", None)
-    os.environ.pop("MAINTENANCE_MESSAGE", None)
-    os.environ.pop("MAINTENANCE_RETRY_AFTER", None)
 
 
 def is_maintenance_active() -> bool:
