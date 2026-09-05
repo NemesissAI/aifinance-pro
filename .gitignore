@@ -16,3 +16,7 @@ aifinance.db
 __pycache__/
 *.pyc
 design-samples.html
+
+# Antigravity's own multi-agent scratch space (BRIEFING.md, DISPATCH.md,
+# progress.md, etc.) — internal coordination, not project state.
+.agents/
