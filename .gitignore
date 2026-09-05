@@ -1,0 +1,18 @@
+# ── Personal data: never leaves this machine ────────────────────────────────
+# The whole point of the project is that statements stay local. If this repo is
+# ever pushed anywhere, these are the files that must not go with it.
+data/
+statements/
+user-state.json
+user-state.json.bak
+profile.json
+mail-log.json
+aifinance.db
+*.db
+.gmail/
+
+# ── Environment ────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+design-samples.html
