@@ -4,6 +4,12 @@ This project is worked on from more than one place — Claude Code and
 Antigravity both open the same directory. Neither locks files, so nothing stops
 them overwriting each other. These are the rules that keep that safe.
 
+## 0. Announce what you're touching, before you touch it
+
+`AGENT-CHAT.md` is a live status board and a log. Claim your files there
+*before* editing, drop the claim when you commit and stop. It's a convention,
+not a lock — it only works if both sides actually check it first.
+
 ## 1. Git is the shared memory. Commit before switching.
 
 Whoever is about to stop working commits first:
