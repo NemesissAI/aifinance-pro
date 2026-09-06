@@ -20,7 +20,7 @@ from pathlib import Path
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -164,6 +164,15 @@ async def upload(file: UploadFile = File(...), password: str = Form(""),
     except parse_api.ParseError as e:
         # The PDF goes out of scope here: nothing was written anywhere.
         return JSONResponse({"error": e.code, "detail": str(e)}, status_code=422)
+    except Exception:
+        # pikepdf/pdfplumber raise their own exception types for a corrupt or
+        # non-PDF file — tested by uploading a PNG renamed to .pdf, which threw
+        # unhandled and came back as a bare 500 with a stack trace and no
+        # explanation. A user's mis-selected file is routine input, not a
+        # server fault, and must never look like one.
+        return JSONResponse(
+            {"error": "unreadable", "detail": "That file could not be read as a PDF."},
+            status_code=422)
 
     sid = payload["statementId"]
     with db.session() as s:
@@ -358,6 +367,25 @@ def _startup() -> None:
     db.init()
 
 
-# The dashboard itself, mounted last so every /api/* route wins.
-if (ROOT / "index.html").is_file():
-    app.mount("/", StaticFiles(directory=str(ROOT), html=True), name="static")
+# ── static assets ────────────────────────────────────────────────────────────
+#
+# This used to be `app.mount("/", StaticFiles(directory=str(ROOT)))` — serving
+# the *entire project root* with no authentication. Checked directly against a
+# running instance: `/profile.json`, `/user-state.json`, `/aifinance.db` (every
+# user's password hash and every statement in the database) and `/server/app.py`
+# all came back 200, in full. The multi-user rebuild exists specifically so
+# personal data lives behind a login; that one line undid it for anyone who
+# could type a URL. Two things only are served now, both harmless by design:
+# the dashboard shell and the bank logo images.
+INDEX_HTML = ROOT / "index.html"
+
+
+@app.get("/")
+async def index():
+    if not INDEX_HTML.is_file():
+        raise HTTPException(404)
+    return FileResponse(INDEX_HTML)
+
+
+if (ROOT / "logos").is_dir():
+    app.mount("/logos", StaticFiles(directory=str(ROOT / "logos")), name="logos")

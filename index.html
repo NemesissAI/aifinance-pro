@@ -762,12 +762,14 @@
             </div>
             <p class="text-slate-400 text-sm">Upload every statement from the last 3 months so the AI can establish a baseline for your spending habits and recurring bills.</p>
             
+            <input type="file" id="file-upload-input" accept="application/pdf,.pdf" multiple class="hidden">
             <div class="border-2 border-dashed border-slate-700 rounded-2xl p-10 text-center hover:border-blue-500/50 hover:bg-slate-800/30 transition-default cursor-pointer" onclick="document.getElementById('file-upload-input').click()">
               <i class="fa-solid fa-cloud-arrow-up text-4xl text-slate-500 mb-3"></i>
               <p class="text-white font-medium">Click to select PDF statements</p>
               <p class="text-xs text-slate-500 mt-1">or drag and drop here</p>
             </div>
-            
+            <div id="onboarding-upload-status" class="text-xs text-slate-500"></div>
+
             <div class="flex justify-between items-center pt-4">
               <button id="onboarding-back-2" class="px-5 py-2.5 text-slate-400 hover:text-white transition-default text-sm">Back</button>
               <button id="onboarding-next-2" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-default">Continue to Cycle</button>
@@ -786,9 +788,10 @@
               <div class="flex-1">
                 <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Recommended Cycle Start</p>
                 <div class="flex items-baseline gap-2 mt-1">
-                  <span class="text-3xl font-bold text-emerald-400" id="onboarding-cycle-recommendation">5th</span>
+                  <span class="text-3xl font-bold text-emerald-400" id="onboarding-cycle-recommendation">—</span>
                   <span class="text-sm text-slate-400">of every month</span>
                 </div>
+                <p id="onboarding-cycle-note" class="text-xs text-slate-500 mt-2 hidden">Not enough statements yet to measure this — pick a day yourself, or upload a couple more months later and re-check in Settings.</p>
               </div>
               <div class="flex-1 space-y-2">
                 <label class="text-xs text-slate-400 block">Override Day (1-28):</label>
@@ -7150,19 +7153,65 @@
     });
 
     next1.addEventListener('click', () => showStep(2));
-    
-    // Step 2: Upload transition (file upload logic is handled elsewhere, we just provide the button)
+
+    // Step 2: Upload — wired to the hosted (multi-user) /api/upload contract,
+    // multipart form, not the local server's JSON+base64 postPdf() used
+    // elsewhere in this file for the single-user build.
+    let onboardingUploadCount = 0;
+    const fileInput = document.getElementById('file-upload-input');
+    const uploadStatus = document.getElementById('onboarding-upload-status');
+
+    fileInput.addEventListener('change', async () => {
+      const files = [...fileInput.files];
+      for (const file of files) {
+        uploadStatus.textContent = `Uploading ${file.name}…`;
+        try {
+          const form = new FormData();
+          form.append('file', file);
+          const res = await fetch('/api/upload', { method: 'POST', body: form });
+          const data = await res.json();
+          if (res.ok && (data.status === 'imported' || data.status === 'replaced')) {
+            onboardingUploadCount++;
+          }
+          uploadStatus.textContent = res.ok
+            ? `${onboardingUploadCount} statement(s) imported so far.`
+            : `${file.name}: ${data.detail || 'could not be read'}`;
+        } catch (e) {
+          uploadStatus.textContent = `${file.name}: upload failed.`;
+        }
+      }
+      fileInput.value = '';
+    });
+
+    // Ordinal suffix ("1st", "2nd", "3rd", "21st"), not a blanket "th".
+    function ordinal(n) {
+      const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+
     back2.addEventListener('click', () => showStep(1));
     next2.addEventListener('click', async () => {
-      // Fetch cycle day recommendation
+      const recEl = document.getElementById('onboarding-cycle-recommendation');
+      const inputEl = document.getElementById('onboarding-cycle-input');
       try {
         const res = await fetch('/api/onboarding/cycle-day');
-        if (res.ok) {
-          const data = await res.json();
-          document.getElementById('onboarding-cycle-recommendation').innerText = (data.day || 1) + 'th';
-          document.getElementById('onboarding-cycle-input').value = data.day || 1;
+        const data = await res.json();
+        // The recommender needs a couple of months of statements before it
+        // means anything — {ready:false} with no day at all, not a "day 1"
+        // to fake past silently.
+        const noteEl = document.getElementById('onboarding-cycle-note');
+        if (res.ok && data.ready && data.recommended) {
+          recEl.innerText = ordinal(data.recommended);
+          inputEl.value = data.recommended;
+          noteEl.classList.add('hidden');
+        } else {
+          recEl.innerText = '—';
+          inputEl.value = inputEl.value || 1;
+          noteEl.classList.remove('hidden');
         }
-      } catch(e) {}
+      } catch (e) {
+        recEl.innerText = '—';
+      }
       showStep(3);
     });
 
