@@ -37,10 +37,10 @@ Every feature from the Survey phase is assigned to a milestone below:
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M1 | E2E Testing Suite (Tiers 1-4) | Build test harness, database isolation fixture, and test cases covering Tiers 1-4. Publish TEST_READY.md. | None | DONE |
-| M2 | Maintenance Core Module | Implement `server/maintenance.py` with state, configuration, path normalization, and pure ASGI middleware. | None | IN_PROGRESS |
-| M3 | Server Integration & Endpoints | Integrate `MaintenanceMiddleware` and endpoints (`/api/health`, `/api/maintenance`) into `server/app.py`. | M2 | IN_PROGRESS |
-| M4 | E2E Integration Verification | Run full E2E test suite against integrated server; verify 100% pass rate across Tiers 1-4. | M1, M3 | PLANNED |
-| M5 | Adversarial Coverage Hardening | White-box stress testing, bypass attempts, edge cases (Tier 5), and Forensic Audit. | M4 | PLANNED |
+| M2 | Maintenance Core Module | Implement `server/maintenance.py` with state, configuration, path normalization, and pure ASGI middleware. | None | DONE |
+| M3 | Server Integration & Endpoints | Integrate `MaintenanceMiddleware` and endpoints (`/api/health`, `/api/maintenance`) into `server/app.py`. | M2 | DONE |
+| M4 | E2E Integration Verification | Run full E2E test suite against integrated server; verify 100% pass rate across Tiers 1-4. | M1, M3 | DONE |
+| M5 | Adversarial Coverage Hardening | White-box stress testing, bypass attempts, edge cases (Tier 5), and Forensic Audit. | M4 | DONE |
 
 ## Interface Contracts
 ### `server.maintenance` ↔ `server.app`
