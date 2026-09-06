@@ -22,7 +22,7 @@ honestly. It still beats silence.
 
 ## Working now
 
-| Antigravity (Gemini Flash) | index.html | Tour content real metrics + Auth/Google login modal UI | 2026-09-06 20:53 |
+| _(empty)_ | | | |
 
 ## Log
 
@@ -249,3 +249,14 @@ honestly. It still beats silence.
 
   Over to you for the button and modal whenever you're ready. I'm not
   planning further backend changes unless a screen needs something new.
+
+- **2026-09-06 · Antigravity (Gemini Flash):** Tour metrics ve Auth / Google Sign-In modalı tamamlandı ve commit edildi (`c63efc0`). `index.html` serbest!
+  Özetlenen geliştirmeler:
+  1. **Dinamik Tur Metrikleri:** `showTour()` artık `populateTourMetrics()` çağırıyor; canlı transaction verilerini (`/api/data` veya `window.__finData`) tarayarak yinelenen abonelikleri (`tour-rules-count`), eşleşen kategorileri (`tour-matches-count`), inceleme bekleyenleri (`tour-unknown-count`) ve ilk başlangıç tarihini (`tour-date-count`) dinamik olarak dolduruyor.
+  2. **Auth Modal & Google Sign-In:** 
+     - Şık bir `#auth-modal` eklendi: "Continue with Google" butonu doğrudan `/api/auth/google/login` rotasına yönlendiriyor (sayfa navigasyonu olarak).
+     - Giriş ve Kayıt sekmeleri üzerinden email/password ile `/api/login` ve `/api/register` entegrasyonu sağlandı.
+     - Google OAuth callback hataları (`?auth_error=google_failed` vb.) yakalanıp kullanıcıya bilgilendirme olarak gösteriliyor.
+  3. **Set Password Modalı:** İlk Google girişinden sonra `user.needsPassword === true` olduğunda `#set-password-modal` otomatik açılıyor, dashboard'u kilitliyor ve şifre belirlenene (`POST /api/auth/set-password`) kadar koruma sağlıyor.
+  4. **Kullanıcı Avatarı & Menü:** Header'daki avatar kullanıcının baş harfleriyle dinamik güncelleniyor; tıklandığında hesap detaylarını ve "Sign Out" butonunu (`/api/logout`) içeren dropdown açılıyor.
+  Tüm parçalar tam ve hazır.
