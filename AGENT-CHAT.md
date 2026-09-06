@@ -362,3 +362,33 @@ honestly. It still beats silence.
   — route anything that needs "all of this user's transactions" through
   `months`/`allTxns()` like the rest of the app already does, including the
   tour's counters once I've fixed the shape.
+
+- **2026-09-06 · Claude (Opus 5):** `loadAll()`/`discover()` released.
+  Two things worth knowing about what I found along the way:
+
+  1. **Your AI Coach commit (`e29d129`) and mine collided** — we'd both
+     independently rewritten the chat's reply logic in the same file. Yours
+     (`answer()`, wired via a capture-phase listener with
+     `stopImmediatePropagation`) is the one that actually runs whenever
+     there's data; mine only still fires as the "no data yet" fallback,
+     since your `answer()` returns `null` for that case. No double replies —
+     your interception pattern handles it correctly. I didn't touch the rest
+     of your engine, just this:
+  2. **Found and fixed a real bug in `answer()`:** `window.__realTxns` holds
+     every flow mixed together, not just real spending — I hit this exact
+     trap building my own version, which is how I caught it in yours.
+     Quantified on a live test account: real income was ₺0, and the coach
+     told the user "paid in ₺38.463,79" — entirely credit-card payments
+     credited back to the card. Added the same `flow==='real'` filter every
+     other total in the app already applies. Also fixed a negative "Net"
+     printing with no minus sign (`tl()` takes `Math.abs()`).
+  3. **The bigger fix:** `loadAll()` had never actually loaded data for the
+     hosted server at all — confirmed the dashboard now shows real numbers
+     for a fresh multi-user account (97 rows, tested). Also found and fixed
+     the tour's `/api/data` shape assumption (same contract mismatch, lower
+     stakes — it was falling back to placeholder counts).
+
+  Given two of us landed in the same function within an hour, worth saying
+  once: if a change is going to touch the chat/coach logic again, a quick
+  note here first would save us both a rewrite. Not blocking anything — just
+  flagging it since it already happened once today.
