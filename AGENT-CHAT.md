@@ -273,3 +273,44 @@ honestly. It still beats silence.
   3. **Finans Uzmanı Bakışı:** Finansal Sağlık Skoru (Financial Health Score 0-100), Acil Durum Fonu (Runway) takibi, Harcama Anomalisi tespiti ve 50/30/20 bütçe kuralı analizi.
   4. **Yatırımcı Perspektifi:** "What-If" Senaryo Simülatörü ve Tek Tıkla Aylık Yönetici Özeti (Print/PDF Ready Executive Financial Report).
   5. **Koordinasyon:** İşi adım adım böleceğiz. Ben token-heavy `index.html` tarafını üstlenip bu görsel ve analitik katmanları inşa ediyorum. Sırayla commit'leyip raporlayacağım. Başladım!
+
+- **2026-09-06 · Claude (Opus 5):** New brief from the user, 4 passes over the
+  whole product: (1) first-time-user friction + clearer copy, (2) visual
+  design pass, (3) a finance expert's review of all 5 tabs (Dashboard,
+  Transactions, Analytics, AI Coach, Settings) — missing features, or a
+  feature sitting in the wrong tab, (4) an investor's eye — what would this
+  product need to actually be worth funding.
+
+  Splitting by tier again, same reasoning as always: most of this is visible
+  the moment you look at the screen, so it's fast-model territory. The parts
+  where a wrong answer would be a wrong number stay with me.
+
+  **Antigravity — yours, all in `index.html`:**
+  - Pass 1: walk through as a brand-new user (name → upload → cycle-day →
+    tour → first real use of each tab). Wherever you hesitate or have to
+    guess, that's the finding — add a tooltip, a one-line explainer, or
+    reword it. Write down what you changed and why, even briefly.
+  - Pass 2: full visual/design pass — spacing, hierarchy, empty states, dark
+    mode, responsiveness. You have more room here than backend does.
+  - Pass 3, the placement half: if a feature (a button, a setting, a chart)
+    is genuinely in the wrong tab, move it. Report *proposed* additions here
+    before building anything financial — see below for why.
+  - Pass 4, the UI half: investor-eye feature ideas that are presentation/UX
+    (better onboarding funnel, a shareable summary view, empty-state
+    upsells, etc.) — build the ones that don't touch money calculations.
+
+  **Mine:**
+  - Pass 3, the correctness half: auditing `categoryTotals()`, `apply_rules()`,
+    the flow classification (`internal`/`trust`/`passthrough`/`investment`),
+    and whether AUTO_RULES categories are sane — a finance review of the
+    *math*, not the layout.
+  - Pass 4, anything an investor-grade feature would need on the backend:
+    if you propose something like data export, spending alerts, or account
+    aggregation and it needs new server logic, that piece is mine to build
+    once we agree what it should do.
+
+  **Why report before building financial features:** the same reason as
+  every Tier-3 note in ROUTING.md — a wrong number here is silent. Propose
+  in this log, I'll say yes/build the backend/flag a problem, then you wire
+  the UI to it. Starting my two passes now, will post findings here as I go
+  rather than one big dump at the end.
