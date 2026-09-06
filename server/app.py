@@ -19,9 +19,11 @@ from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,6 +60,25 @@ app.add_middleware(
 )
 app.add_middleware(maintenance.MaintenanceMiddleware)
 
+# Google OAuth. authlib reads/writes request.session for the state and nonce
+# it uses to stop a forged callback, which is why SessionMiddleware has to be
+# registered above this. Registration succeeds even with no client id/secret —
+# it only fails the moment a route tries to *use* it — so a missing
+# configuration is caught explicitly in each route below, with a message that
+# says what to set, rather than surfacing as an opaque 500 partway through.
+oauth = OAuth()
+oauth.register(
+    name="google",
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
+
+def _google_configured() -> bool:
+    return bool(os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"))
+
 
 def current_user(request: Request):
     uid = request.session.get("uid")
@@ -69,7 +90,11 @@ def current_user(request: Request):
             request.session.clear()
             raise HTTPException(401, "Sign in first.")
         return {"id": u.id, "email": u.email, "name": u.name,
-                "profile": dict(u.profile or {})}
+                "profile": dict(u.profile or {}),
+                # A Google-only account has no password yet. The product
+                # requires one — see the sign-in route below for why — so the
+                # frontend gates everything but the set-password screen on this.
+                "needsPassword": not bool(u.password_hash)}
 
 
 # ── accounts ────────────────────────────────────────────────────────────────
@@ -128,21 +153,83 @@ async def me(user=Depends(current_user)):
     return user
 
 
-@app.get("/api/auth/google")
-async def google_start():
-    """Google sign-in still ends with the user setting a password.
-
-    Deliberate: an account that exists only through Google is locked out the
-    day that link is revoked, and this product holds the only copy of months of
-    someone's categorisation work.
-    """
-    if not os.environ.get("GOOGLE_CLIENT_ID"):
+@app.get("/api/auth/google/login")
+async def google_login(request: Request):
+    """A navigation, not an API call — the button should point its href here
+    directly rather than fetch() it, since the response is a 302 to Google."""
+    if not _google_configured():
         return JSONResponse(
             {"error": "not_configured",
              "detail": "Google sign-in needs GOOGLE_CLIENT_ID and "
-                       "GOOGLE_CLIENT_SECRET. Email and password work now."},
+                       "GOOGLE_CLIENT_SECRET set on the server. Email and "
+                       "password work now."},
             status_code=503)
-    raise HTTPException(501, "Google flow is wired in the next step.")
+    redirect_uri = str(request.url_for("google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@app.get("/api/auth/google/callback", name="google_callback")
+async def google_callback(request: Request):
+    if not _google_configured():
+        raise HTTPException(503, "Google sign-in is not configured.")
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except OAuthError:
+        # Cancelled consent, an expired state, or a forged callback all land
+        # here — none of them are a server fault, so this is a redirect with
+        # an error flag the page can show, not a 500.
+        return RedirectResponse(url="/?auth_error=google_failed")
+
+    claims = token.get("userinfo") or {}
+    sub = claims.get("sub")
+    email = (claims.get("email") or "").strip().lower()
+    name = (claims.get("name") or "").strip()[:120]
+    if not sub or not email:
+        return RedirectResponse(url="/?auth_error=google_no_email")
+
+    with db.session() as s:
+        u = s.scalar(select(db.User).where(db.User.google_sub == sub))
+        if u is None:
+            # An email/password account with this address exists already —
+            # link the Google identity to it rather than making a duplicate
+            # account with the same email, which the unique constraint would
+            # reject anyway and which would silently split one person's data
+            # across two accounts.
+            u = db.user_by_email(s, email)
+        if u is None:
+            u = db.User(email=email, name=name, google_sub=sub,
+                       password_hash=None, profile={})
+            s.add(u)
+        elif not u.google_sub:
+            u.google_sub = sub
+        s.commit()
+        request.session["uid"] = u.id
+
+    # The frontend checks /api/me.needsPassword on landing and shows the
+    # set-password screen itself — nothing more to signal here.
+    return RedirectResponse(url="/")
+
+
+@app.post("/api/auth/set-password")
+async def set_password(request: Request, user=Depends(current_user)):
+    """How a Google-only account gets the password this product requires.
+
+    Same policy as /api/register, deliberately: a password chosen here is not
+    a lesser one just because it comes second.
+    """
+    body = await request.json()
+    password = str(body.get("password", ""))
+    with db.session() as s:
+        u = s.get(db.User, user["id"])
+        try:
+            passwords.check(password, email=u.email, name=u.name)
+        except passwords.WeakPassword as e:
+            raise HTTPException(400, str(e))
+        if await passwords.is_breached(password):
+            raise HTTPException(400, "That password appears in a known breach. Pick another.")
+        u.password_hash = hasher.hash(passwords.normalize(password))
+        s.commit()
+    return {"ok": True}
 
 
 # ── statements ──────────────────────────────────────────────────────────────
