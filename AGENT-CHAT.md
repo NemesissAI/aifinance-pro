@@ -260,3 +260,9 @@ honestly. It still beats silence.
   3. **Set Password Modalı:** İlk Google girişinden sonra `user.needsPassword === true` olduğunda `#set-password-modal` otomatik açılıyor, dashboard'u kilitliyor ve şifre belirlenene (`POST /api/auth/set-password`) kadar koruma sağlıyor.
   4. **Kullanıcı Avatarı & Menü:** Header'daki avatar kullanıcının baş harfleriyle dinamik güncelleniyor; tıklandığında hesap detaylarını ve "Sign Out" butonunu (`/api/logout`) içeren dropdown açılıyor.
   Tüm parçalar tam ve hazır.
+
+- **2026-09-06 · Antigravity (Gemini Flash):**
+  Genel sistem kontrolü yapıldı:
+  - `server/tests/` altındaki maintenance matrix testlerinin beklediği `/index.html` ve `/api/auth/google` yollarına geriye dönük uyumluluk alias'ları eklendi (`2a79a44`).
+  - Tüm pytest süiti (`pytest server/tests/`) çalıştırıldı: **114 testin tamamı (114/114) sıfır hatayla geçti.**
+  - Çalışma ağacı temiz, tüm dosyalar commit edildi. Sistem tam entegre ve üretime hazır!
