@@ -2266,43 +2266,144 @@
     const chatSendBtn  = document.getElementById('chat-send-btn');
     const chatMessages = document.getElementById('chat-messages');
 
-    // Knowledge base for keyword matching
+    // ─────────────────────────────────────────────────────────────────
+    // These used to be six fixed strings from the original seeded-demo
+    // build — "TechCorp", "Starbucks ₺1.312", "debt-free by March 2027" —
+    // none of it real, all of it left behind after every other seeded
+    // figure in the app was already replaced with live data (see
+    // CLAUDE.md: the notification bell, the budgets, the debt-trend chart).
+    // A user asking "what's my debt" and being told a made-up number by the
+    // one feature branded "AI Coach" is the worst possible place for this
+    // bug to still be alive, so every reply below is computed at answer
+    // time from window.__realTxns.
+    //
+    // This block is its own IIFE like every <script> on this page, so it
+    // cannot call categoryTotals()/isSpendCategory() defined elsewhere —
+    // small local copies, same logic, same names avoided on purpose so
+    // nobody mistakes them for the shared ones.
+    // ─────────────────────────────────────────────────────────────────
+    const coachEsc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const tl2 = n => Math.abs(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const money2 = n => (n < 0 ? '−' : '') + '₺' + tl2(n);
+    const coachSpend = c => c !== 'Income' && c !== 'Unknown';
+    const coachRefund = t => t.type === 'income' && coachSpend(t.category) && (t.flow || 'real') === 'real';
+
+    function coachTotals() {
+      const all = window.__realTxns || [];
+      const real = all.filter(t => (t.flow || 'real') === 'real');
+      const refunded = real.filter(coachRefund).reduce((s, t) => s + t.amount, 0);
+      const income = real.filter(t => t.type === 'income' && coachSpend(t.category) === false)
+                         .reduce((s, t) => s + t.amount, 0);
+      const expense = real.filter(t => t.type === 'expense')
+                          .reduce((s, t) => s + Math.abs(t.amount), 0) - refunded;
+      const byCat = {};
+      real.forEach(t => {
+        if (t.type === 'expense') byCat[t.category] = (byCat[t.category] || 0) + Math.abs(t.amount);
+        else if (coachSpend(t.category)) byCat[t.category] = (byCat[t.category] || 0) - t.amount;
+      });
+      return { real, income, expense, byCat, hasData: all.length > 0 };
+    }
+
+    // "Which category is this question about" — the reply for one category
+    // is the same shape for all of them, so it is written once.
+    function coachCategoryReply(emoji, category, question) {
+      const { real, expense, byCat, hasData } = coachTotals();
+      if (!hasData) return coachNoData();
+      const spent = byCat[category] || 0;
+      if (spent <= 0) {
+        return `${emoji} No ${coachEsc(category)} spending shows up in the period you're viewing. ` +
+               `Check the period selector at the top, or this may just be a quiet month for it.`;
+      }
+      const rows = real.filter(t => t.category === category && t.type === 'expense');
+      const n = rows.length;
+      const byMerchant = {};
+      rows.forEach(t => byMerchant[t.merchant] = (byMerchant[t.merchant] || 0) + Math.abs(t.amount));
+      const top = Object.entries(byMerchant).sort((a, b) => b[1] - a[1])[0];
+      const share = expense > 0 ? (spent / expense * 100).toFixed(1) : '0';
+      return `${emoji} <strong>${money2(spent)}</strong> on ${coachEsc(category)} in this period, across ` +
+             `<strong>${n}</strong> transaction${n === 1 ? '' : 's'} — <strong>${share}%</strong> of your spending.` +
+             (top ? ` The largest single source is <strong>${coachEsc(top[0])}</strong> (${money2(top[1])}).` : '') +
+             ` ${question}`;
+    }
+
+    function coachNoData() {
+      return '📭 Nothing imported for the period you\'re viewing yet. Upload a statement or widen the period selector at the top, and ask again.';
+    }
+
+    // Knowledge base for keyword matching. `reply` is a function now, called
+    // at send time so the numbers are always this session's real figures —
+    // never a string baked in when the page was written.
     const RESPONSES = [
       {
         keywords: ['shopping', 'trendyol', 'alışveriş'],
-        reply: '🛍️ You have spent <strong>₺4,820</strong> on Shopping this month across <strong>12 transactions</strong>. That\'s 22.5% of your total expenses. Should I suggest ways to reallocate funds?',
+        reply: () => coachCategoryReply('🛍️', 'Shopping', 'Want me to suggest ways to reallocate funds?'),
       },
       {
-        keywords: ['food', 'yemek', 'starbucks', 'migros', 'restaurant', 'dining'],
-        reply: '🍽️ Your Food & Dining spending is <strong>₺3,650</strong> this month — <strong>17%</strong> of expenses. Starbucks alone accounts for ₺1,312. Want me to set a daily coffee budget?',
+        keywords: ['food', 'yemek', 'restaurant', 'dining', 'migros'],
+        reply: () => coachCategoryReply('🍽️', 'Food & Dining', 'Want me to help set a budget for it?'),
       },
       {
         keywords: ['debt', 'borç', 'credit', 'kredi', 'card'],
-        reply: '💳 Your remaining credit card debt is <strong>₺14,870</strong> (down 5% MoM). At this pace, you\'ll be debt-free by <strong>March 2027</strong>. Should I model an accelerated payoff plan?',
+        reply: () => {
+          const el = document.getElementById('debt-value');
+          const text = el ? el.textContent.trim() : null;
+          if (!text || text === '₺0,00') {
+            return '💳 No credit card debt is showing for the current view — either it\'s fully paid, or no card statement is loaded for this period.';
+          }
+          return `💳 Your current credit card balance is <strong>${coachEsc(text)}</strong>, based on the statements ` +
+                 `you've imported. Want me to walk through what\'s driving it category by category?`;
+        },
       },
       {
         keywords: ['saving', 'tasarruf', 'savings', 'budget', 'bütçe'],
-        reply: '🐷 Your savings rate is <strong>25.5%</strong> — exceeding your 20% target! You\'ve saved ₺7,329 net this month. Keep it up or shall I suggest investment options?',
+        reply: () => {
+          const { income, expense, hasData } = coachTotals();
+          if (!hasData) return coachNoData();
+          const net = income - expense;
+          const rate = income > 0 ? (net / income * 100) : 0;
+          const el = document.getElementById('savings-value');
+          const shown = el ? el.textContent.trim() : rate.toFixed(1) + '%';
+          return `🐷 Your savings rate for this period is <strong>${coachEsc(shown)}</strong> ` +
+                 `(${money2(net)} net on ${money2(income)} income). ` +
+                 (rate >= 20 ? 'That clears the usual 20% benchmark.' : 'That is below the usual 20% benchmark.') +
+                 ' Want a category-by-category breakdown of where it went?';
+        },
       },
       {
         keywords: ['netflix', 'entertainment', 'eğlence', 'subscription'],
-        reply: '🎬 Your Entertainment category totals <strong>₺2,140</strong> this month. Netflix costs ₺119.99/mo. You also have 2 other active subscriptions. Want a subscription audit?',
+        reply: () => coachCategoryReply('🎬', 'Entertainment', 'Want a look at your active subscriptions in Settings?'),
       },
       {
         keywords: ['income', 'salary', 'maaş', 'gelir'],
-        reply: '💰 Your July income was <strong>₺28,750</strong> from TechCorp. That\'s consistent with your 6-month average of ₺27,358. Any side income to report?',
+        reply: () => {
+          const { income, hasData } = coachTotals();
+          if (!hasData) return coachNoData();
+          return `💰 Real income for this period is <strong>${money2(income)}</strong>, from the statements ` +
+                 `you've imported — this excludes transfers between your own accounts and money held for someone ` +
+                 `else. Any income not showing up? It may still be sitting in the Unknown queue.`;
+        },
       },
       {
         keywords: ['hello', 'hi', 'hey', 'merhaba', 'selam'],
-        reply: '👋 Hi Talha! How can I help you today? You can ask me about your spending, savings, debt, or any specific merchant.',
+        reply: () => {
+          const name = (window.__currentUserName || '').split(' ')[0];
+          return `👋 Hi${name ? ' ' + coachEsc(name) : ''}! Ask me about your spending, savings, debt, or a specific category or merchant.`;
+        },
       },
       {
         keywords: ['help', 'yardım', 'what can you do', 'ne yapabilirsin'],
-        reply: '🤖 I can help you with:\n• Spending analysis by category\n• Debt payoff projections\n• Savings rate tracking\n• Merchant-level breakdowns\n• Budget recommendations\n\nJust ask in natural language!',
+        reply: () => '🤖 I can help you with:\n• Spending by category, computed from what you\'ve actually imported\n' +
+                     '• Your current savings rate and net\n• Credit card balance\n• Where your income is coming from\n\n' +
+                     'Ask in natural language, in Turkish or English.',
       },
     ];
 
-    const FALLBACK_REPLY = '🔍 I\'m analyzing your portfolio to answer that. In the meantime — your finances look healthy with a <strong>25.5% savings rate</strong> and declining debt. How else can I help?';
+    const FALLBACK_REPLY = () => {
+      const { hasData } = coachTotals();
+      return hasData
+        ? '🔍 I don\'t have a canned answer for that yet — try asking about a category (Shopping, Food & Dining, Entertainment), your savings rate, your debt, or your income.'
+        : coachNoData();
+    };
 
     function getTimestamp() {
       const now = new Date();
@@ -2378,16 +2479,19 @@
       appendMessage(raw, 'user');
       chatInput.value = '';
 
-      // Find matching response
+      // Find matching response. Every `reply` is a function now — called
+      // here, at send time, so the figures in it are this session's real
+      // data rather than whatever was true when the page was written.
       const lower = raw.toLowerCase();
-      let reply = FALLBACK_REPLY;
+      let replyFn = FALLBACK_REPLY;
 
       for (const entry of RESPONSES) {
         if (entry.keywords.some(kw => lower.includes(kw))) {
-          reply = entry.reply;
+          replyFn = entry.reply;
           break;
         }
       }
+      const reply = replyFn();
 
       // Show typing indicator, then respond
       showTypingIndicator();
@@ -7841,6 +7945,7 @@
         const meRes = await fetch('/api/me');
         if (meRes.ok) {
           currentUser = await meRes.json();
+          window.__currentUserName = currentUser.name || '';
           const displayName = currentUser.name || currentUser.email.split('@')[0];
           if (headerUserName) headerUserName.textContent = displayName;
           if (dropdownUserName) dropdownUserName.textContent = displayName;
