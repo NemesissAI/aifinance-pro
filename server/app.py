@@ -291,6 +291,68 @@ async def maintenance_status():
     return maintenance.get_maintenance_status_payload()
 
 
+@app.get("/api/onboarding/status")
+async def onboarding_status(user=Depends(current_user)):
+    """Where this user is, so the UI never has to infer it from three calls."""
+    with db.session() as s:
+        payloads = [r.payload for r in db.user_statements(s, user["id"])]
+        state = db.get_state(s, user["id"])
+    return onboarding.status(payloads, user["profile"], state)
+
+
+@app.post("/api/onboarding/name")
+async def onboarding_name(request: Request, user=Depends(current_user)):
+    """Claim the name the banks print for this person.
+
+    Normalised here rather than in the browser because it has to land on
+    exactly what the parser matches against — see onboarding.py. A mismatch
+    raises nothing and silently turns the user's own transfers into income.
+    """
+    body = await request.json()
+    try:
+        key = onboarding.normalise_holder_name(str(body.get("name", "")))
+    except onboarding.NameRejected as e:
+        raise HTTPException(400, str(e))
+
+    with db.session() as s:
+        payloads = [r.payload for r in db.user_statements(s, user["id"])]
+        preview = onboarding.preview_name(payloads, key)
+        u = s.get(db.User, user["id"])
+        profile = dict(u.profile or {})
+        keys = [k for k in profile.get("account_holder_keys", []) if k != key]
+        profile["account_holder_keys"] = [key] + keys
+        u.profile = profile
+        s.commit()
+    return {"ok": True, "key": key, **preview}
+
+
+@app.post("/api/onboarding/cycle-day")
+async def onboarding_set_cycle_day(request: Request, user=Depends(current_user)):
+    body = await request.json()
+    try:
+        day = int(body.get("day"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Give a day of the month as a number.")
+    # 29-31 do not exist in every month, so the boundary would move about.
+    if not 1 <= day <= 28:
+        raise HTTPException(400, "Pick a day between 1 and 28 — later days do "
+                                 "not exist in every month.")
+    with db.session() as s:
+        state = db.get_state(s, user["id"])
+        state["aifp.cycleStart"] = day
+        db.put_state(s, user["id"], state)
+    return {"ok": True, "cycleDay": day}
+
+
+@app.post("/api/onboarding/tour-done")
+async def onboarding_tour_done(user=Depends(current_user)):
+    with db.session() as s:
+        state = db.get_state(s, user["id"])
+        state["aifp.tourDone"] = True
+        db.put_state(s, user["id"], state)
+    return {"ok": True}
+
+
 @app.on_event("startup")
 def _startup() -> None:
     db.init()

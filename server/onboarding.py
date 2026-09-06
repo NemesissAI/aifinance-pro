@@ -132,3 +132,98 @@ def analyse(payloads: list[dict]) -> dict:
         "why": why,
         "alternatives": [x for x in scored[:5]],
     }
+
+
+# ── Setting the account holder's own name ───────────────────────────────────
+#
+# The single step a new user cannot skip, and the one place a typo is silent.
+#
+# Statements identify the holder by name, so "was this a transfer between my own
+# accounts, or money from someone else?" is answered by matching that name. The
+# parser matches on person_key(): norm() folds Turkish to plain ASCII, then
+# every non-alphanumeric character is dropped. "Talha Açık", "TALHAAÇIK" and
+# "talha acik" all collapse to "talhaacik".
+#
+# Get this wrong and nothing raises: the user's own transfers stop being
+# recognised as internal and start counting as income. Measured on the first
+# user's data, a missing name turned eleven transfers worth ₺31.708 into
+# phantom income. So the normalisation lives here, next to the parser it has to
+# agree with, and never in the browser.
+
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "tools"))
+from parse_statement_local import person_key  # noqa: E402
+
+
+class NameRejected(ValueError):
+    """Carries a sentence the user can act on."""
+
+
+def normalise_holder_name(raw: str) -> str:
+    """The name as the parser will see it, or an explanation of why it cannot."""
+    key = person_key(raw or "")
+    if len(key) < 4:
+        raise NameRejected(
+            "Enter your full name as it is printed on your statements — at "
+            "least four letters once spaces and punctuation are removed."
+        )
+    if key.isdigit():
+        raise NameRejected("That looks like a number, not a name.")
+    return key
+
+
+def preview_name(payloads: list[dict], key: str) -> dict:
+    """What claiming this name would change, before it is saved.
+
+    Two different numbers, because they answer two different worries.
+
+    `alreadyRecognised` — rows already marked `self`. Some templates work this
+    out without a profile at all: Kuveyt prints both sides of a transfer, so
+    sender == recipient settles it. Reporting only the *new* matches would show
+    a confident "0" on a perfectly correct name and read as "you typed it
+    wrong".
+
+    `wouldChange` — rows currently attributed to a stranger whose name is in
+    fact this user's. These are the ones that stop being counted as income.
+    """
+    already, would_change, sample = 0, 0, []
+    for p in payloads:
+        for t in p.get("transactions", []):
+            cp = str(t.get("counterparty") or "")
+            label = str(t.get("counterpartyLabel") or t.get("merchant") or "")
+            if cp == "self":
+                already += 1
+            elif cp == key or (label and person_key(label) == key):
+                would_change += 1
+                if len(sample) < 3:
+                    sample.append({"date": t.get("date"), "amount": t.get("amount"),
+                                   "merchant": t.get("merchant")})
+    return {"alreadyRecognised": already, "wouldChange": would_change,
+            "matches": already + would_change, "sample": sample}
+
+
+def status(payloads: list[dict], profile: dict, state: dict) -> dict:
+    """Where this user is in onboarding, so the UI never has to guess."""
+    has_name = bool((profile or {}).get("account_holder_keys"))
+    n = len(payloads)
+    cycle_day = (state or {}).get("aifp.cycleStart")
+    tour_done = bool((state or {}).get("aifp.tourDone"))
+
+    if not has_name:
+        step = "name"
+    elif n == 0:
+        step = "upload"
+    elif cycle_day is None:
+        step = "cycle-day"
+    elif not tour_done:
+        step = "tour"
+    else:
+        step = "done"
+
+    return {"step": step, "hasName": has_name, "statementCount": n,
+            "cycleDay": cycle_day, "tourDone": tour_done,
+            # The recommendation needs a couple of months before it means
+            # anything; the UI can show the upload step until it does.
+            "canRecommendCycleDay": n >= MIN_STATEMENTS}
