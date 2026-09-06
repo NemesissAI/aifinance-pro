@@ -3662,8 +3662,21 @@
       }
 
       // ── 50/30/20 Budget Breakdown Calculation ──
-      const needsCats = new Set(['Market & Gıda', 'Faturalar', 'Kira', 'Sağlık', 'Eğitim', 'Ulaşım & Akaryakıt', 'Utilities', 'Groceries', 'Rent', 'Health', 'Transport']);
-      const savingsCats = new Set(['Yatırım', 'Birikim', 'Kredi & Finans', 'Investment', 'Savings']);
+      // Checked against the categories this build actually produces
+      // (STYLE/CATEGORY_STYLE plus the custom ones already in use) rather
+      // than assumed. None of the original set matched a single real
+      // category: "Transport" (real: "Transportation"), no "Food & Dining",
+      // no "Fixed Costs", no "House Rent" (a custom category already in
+      // this data). Every essential-spending row fell through to `wants`
+      // by exclusion — Food & Dining, the single largest category in this
+      // dataset, was rendering 50/30/20 as if rent and groceries were
+      // discretionary spending, backwards for what the rule exists to show.
+      // A user's own custom category ("Kira", "Market" or anything else)
+      // still can't be guessed — kept the speculative Turkish/English
+      // synonyms below for that case, on top of the confirmed real ones.
+      const needsCats = new Set(['Food & Dining', 'Fixed Costs', 'Health', 'Transportation', 'House Rent',
+        'Market & Gıda', 'Faturalar', 'Kira', 'Sağlık', 'Eğitim', 'Ulaşım & Akaryakıt', 'Utilities', 'Groceries', 'Rent', 'Transport']);
+      const savingsCats = new Set(['Investment', 'Yatırım', 'Birikim', 'Kredi & Finans', 'Savings']);
       
       let needsSum = 0, wantsSum = 0, savingsSum = 0;
       real.filter(t => t.type === 'expense').forEach(t => {
@@ -7968,6 +7981,17 @@
     const simDebtAccel = document.getElementById('sim-debt-accel');
     const simTargetRate = document.getElementById('sim-target-rate');
 
+    // The baseline this simulator projects from — read from the already-
+    // rendered savings card rather than recomputed here, same reason as the
+    // AI Coach fix: this IIFE can't reach renderRealMode()'s local `rate`,
+    // and re-deriving it from window.__realTxns without the flow filter
+    // would reintroduce the exact bug just fixed there.
+    function currentSavingsRate() {
+      const el = document.getElementById('savings-value');
+      const n = el ? parseFloat((el.textContent || '').replace('%', '').replace(',', '.')) : NaN;
+      return Number.isFinite(n) ? n : 0;
+    }
+
     function updateSimulation() {
       if (!sliderCut || !sliderInvest) return;
       const cut = parseInt(sliderCut.value) || 0;
@@ -7984,7 +8008,12 @@
       const monthsFaster = Math.max(1, (cut * 0.15 + (invest / 2500))).toFixed(1);
       if (simDebtAccel) simDebtAccel.textContent = `${monthsFaster} Months`;
 
-      const targetSavingsRate = (25.5 + (cut * 0.45) + (invest / 1500)).toFixed(1);
+      // Was a hard-coded 25.5 — the exact figure from the original seeded
+      // demo's AI Coach reply ("Your savings rate is 25.5%"), still alive
+      // here as this simulator's starting point regardless of what the
+      // account it's running against actually shows. A user whose real rate
+      // is 3% moved a slider to 0 and was told their target rate was 25.5%.
+      const targetSavingsRate = (currentSavingsRate() + (cut * 0.45) + (invest / 1500)).toFixed(1);
       if (simTargetRate) simTargetRate.textContent = `${targetSavingsRate}%`;
     }
 
