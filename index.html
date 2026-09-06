@@ -426,6 +426,15 @@
       transform: scale(1) translateY(0);
     }
 
+    /* ── Phase 3: Tour Modal ── */
+    #tour-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    #tour-overlay.open { opacity: 1; pointer-events: all; }
+    
     /* ── Phase 3: Chat message slide-in ── */
     .chat-msg-enter {
       animation: chat-msg-in 0.35s ease-out forwards;
@@ -705,6 +714,94 @@
 
       <!-- ─────────────── SCROLLABLE MAIN CONTENT ─────────────── -->
       <main class="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+
+        <!-- ─────────────── VIEW: ONBOARDING ─────────────── -->
+        <div id="view-onboarding" class="page-view hidden max-w-2xl mx-auto space-y-8 mt-10">
+          <div class="text-center space-y-3">
+            <h2 class="text-3xl font-bold text-white tracking-tight">Welcome to AIFinance Pro</h2>
+            <p class="text-slate-400">Let's set up your monthly AI audit in 3 quick steps.</p>
+          </div>
+
+          <!-- Step Progress Bar -->
+          <div class="flex items-center justify-between px-4 mb-8">
+            <div class="flex-1 h-1 bg-slate-800 rounded-full relative">
+              <div id="onboarding-progress-bar" class="absolute left-0 top-0 h-full bg-blue-500 rounded-full transition-all duration-500 w-1/3"></div>
+            </div>
+          </div>
+
+          <!-- Step 1: Name -->
+          <div id="onboarding-step-1" class="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-bold">1</div>
+              <h3 class="text-xl font-semibold text-white">Your Name on Statements</h3>
+            </div>
+            <p class="text-slate-400 text-sm">How does your name appear on your bank statements? We use this to separate your own transfers from income/expenses.</p>
+            
+            <div class="space-y-4">
+              <input type="text" id="onboarding-name-input" placeholder="e.g. Talha Açık" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-default">
+              
+              <button id="onboarding-name-check-btn" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl border border-slate-700 transition-default">
+                Check Name
+              </button>
+
+              <div id="onboarding-name-preview" class="hidden p-4 rounded-xl bg-blue-900/20 border border-blue-500/30 text-sm text-blue-200">
+                <p><span id="onboarding-name-matches" class="font-bold text-blue-400">0</span> transfers on your statements are already recognised as your own; this name will also catch the ones your banks print differently.</p>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-4">
+              <button id="onboarding-next-1" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-default hidden">Continue to Upload</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Upload -->
+          <div id="onboarding-step-2" class="glass-card rounded-2xl p-6 sm:p-8 space-y-6 hidden opacity-0 transition-default transform translate-y-4">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-bold">2</div>
+              <h3 class="text-xl font-semibold text-white">Upload Historical Data</h3>
+            </div>
+            <p class="text-slate-400 text-sm">Upload every statement from the last 3 months so the AI can establish a baseline for your spending habits and recurring bills.</p>
+            
+            <div class="border-2 border-dashed border-slate-700 rounded-2xl p-10 text-center hover:border-blue-500/50 hover:bg-slate-800/30 transition-default cursor-pointer" onclick="document.getElementById('file-upload-input').click()">
+              <i class="fa-solid fa-cloud-arrow-up text-4xl text-slate-500 mb-3"></i>
+              <p class="text-white font-medium">Click to select PDF statements</p>
+              <p class="text-xs text-slate-500 mt-1">or drag and drop here</p>
+            </div>
+            
+            <div class="flex justify-between items-center pt-4">
+              <button id="onboarding-back-2" class="px-5 py-2.5 text-slate-400 hover:text-white transition-default text-sm">Back</button>
+              <button id="onboarding-next-2" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-default">Continue to Cycle</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Cycle Day -->
+          <div id="onboarding-step-3" class="glass-card rounded-2xl p-6 sm:p-8 space-y-6 hidden opacity-0 transition-default transform translate-y-4">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-bold">3</div>
+              <h3 class="text-xl font-semibold text-white">Monthly Cycle Boundary</h3>
+            </div>
+            <p class="text-slate-400 text-sm">Based on your salary deposits and credit card cutoffs, we recommend starting your financial month on this day.</p>
+            
+            <div class="flex items-center gap-6 p-5 bg-slate-900/50 rounded-xl border border-slate-700/50">
+              <div class="flex-1">
+                <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Recommended Cycle Start</p>
+                <div class="flex items-baseline gap-2 mt-1">
+                  <span class="text-3xl font-bold text-emerald-400" id="onboarding-cycle-recommendation">5th</span>
+                  <span class="text-sm text-slate-400">of every month</span>
+                </div>
+              </div>
+              <div class="flex-1 space-y-2">
+                <label class="text-xs text-slate-400 block">Override Day (1-28):</label>
+                <input type="number" id="onboarding-cycle-input" min="1" max="28" value="5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-center font-bold focus:outline-none focus:border-blue-500">
+              </div>
+            </div>
+            
+            <div class="flex justify-between items-center pt-4">
+              <button id="onboarding-back-3" class="px-5 py-2.5 text-slate-400 hover:text-white transition-default text-sm">Back</button>
+              <button id="onboarding-next-3" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition-default">Finish Setup & Start Tour</button>
+            </div>
+          </div>
+        </div>
 
         <!-- ═══════════ VIEW: DASHBOARD ═══════════ -->
         <div id="view-dashboard" class="page-view space-y-6">
@@ -6953,6 +7050,213 @@
                       reload: async () => { await loadAll(); refreshAll(); } };
   })();
   </script>
+
+  <!-- ─────────────── ONBOARDING & TOUR LOGIC ─────────────── -->
+  <script>
+  (async function() {
+    // Basic elements
+    const viewDashboard = document.getElementById('view-dashboard');
+    const viewOnboarding = document.getElementById('view-onboarding');
+    const step1 = document.getElementById('onboarding-step-1');
+    const step2 = document.getElementById('onboarding-step-2');
+    const step3 = document.getElementById('onboarding-step-3');
+    const progressBar = document.getElementById('onboarding-progress-bar');
+    const navSidebar = document.getElementById('sidebar');
+
+    const btnCheckName = document.getElementById('onboarding-name-check-btn');
+    const inputName = document.getElementById('onboarding-name-input');
+    const namePreview = document.getElementById('onboarding-name-preview');
+    const nameMatches = document.getElementById('onboarding-name-matches');
+    const next1 = document.getElementById('onboarding-next-1');
+    
+    const back2 = document.getElementById('onboarding-back-2');
+    const next2 = document.getElementById('onboarding-next-2');
+    const back3 = document.getElementById('onboarding-back-3');
+    const next3 = document.getElementById('onboarding-next-3');
+
+    // State
+    let currentStep = 1;
+    let serverMode = false;
+
+    // Detect if we are on the server API or local static
+    try {
+      const resp = await fetch('/api/health', { method: 'HEAD' });
+      serverMode = resp.ok;
+    } catch(e) {}
+
+    // 1. Initial State Check
+    if (serverMode) {
+      try {
+        const resp = await fetch('/api/onboarding/status');
+        if (resp.ok) {
+          const status = await resp.json();
+          if (!status.hasName || status.step < 4) {
+            startOnboarding();
+            if (status.hasName) showStep(2);
+          }
+        }
+      } catch(e) { console.error('Failed to get onboarding status', e); }
+    } else {
+      // Local mode just skips onboarding
+    }
+
+    function startOnboarding() {
+      // Hide all standard views and nav
+      document.querySelectorAll('.page-view').forEach(v => v.classList.add('hidden'));
+      viewOnboarding.classList.remove('hidden');
+      if(navSidebar) navSidebar.style.opacity = '0.3'; // Dim sidebar
+    }
+
+    function endOnboarding() {
+      viewOnboarding.classList.add('hidden');
+      viewDashboard.classList.remove('hidden');
+      if(navSidebar) navSidebar.style.opacity = '1';
+    }
+
+    function showStep(n) {
+      step1.classList.add('hidden', 'opacity-0');
+      step2.classList.add('hidden', 'opacity-0');
+      step3.classList.add('hidden', 'opacity-0');
+      
+      const target = n === 1 ? step1 : n === 2 ? step2 : step3;
+      target.classList.remove('hidden');
+      setTimeout(() => target.classList.remove('opacity-0', 'translate-y-4'), 50); // animate in
+      
+      progressBar.style.width = n === 1 ? '33%' : n === 2 ? '66%' : '100%';
+      currentStep = n;
+    }
+
+    // Step 1: Name validation
+    btnCheckName.addEventListener('click', async () => {
+      const name = inputName.value.trim();
+      if (!name) return;
+      btnCheckName.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...';
+      
+      try {
+        const res = await fetch('/api/onboarding/name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // The API contract returns 'alreadyRecognised' and 'wouldChange' or 'matches'
+          nameMatches.innerText = data.alreadyRecognised || data.matches || "0";
+          namePreview.classList.remove('hidden');
+          next1.classList.remove('hidden');
+        }
+      } catch(e) { console.error(e); }
+      finally { btnCheckName.innerText = 'Check Name'; }
+    });
+
+    next1.addEventListener('click', () => showStep(2));
+    
+    // Step 2: Upload transition (file upload logic is handled elsewhere, we just provide the button)
+    back2.addEventListener('click', () => showStep(1));
+    next2.addEventListener('click', async () => {
+      // Fetch cycle day recommendation
+      try {
+        const res = await fetch('/api/onboarding/cycle-day');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('onboarding-cycle-recommendation').innerText = (data.day || 1) + 'th';
+          document.getElementById('onboarding-cycle-input').value = data.day || 1;
+        }
+      } catch(e) {}
+      showStep(3);
+    });
+
+    // Step 3: Cycle boundary
+    back3.addEventListener('click', () => showStep(2));
+    next3.addEventListener('click', async () => {
+      let day = parseInt(document.getElementById('onboarding-cycle-input').value);
+      if (isNaN(day) || day < 1 || day > 28) day = 1;
+      
+      next3.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+      try {
+        await fetch('/api/onboarding/cycle-day', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ day })
+        });
+      } catch(e) {}
+      
+      endOnboarding();
+      showTour();
+    });
+
+    // Tour Logic
+    const tourOverlay = document.getElementById('tour-overlay');
+    const tourCloseBtn = document.getElementById('tour-close-btn');
+    
+    function showTour() {
+      if(tourOverlay) tourOverlay.classList.add('open');
+    }
+    
+    if(tourCloseBtn) {
+      tourCloseBtn.addEventListener('click', async () => {
+        tourOverlay.classList.remove('open');
+        try {
+          await fetch('/api/onboarding/tour-done', {method: 'POST'});
+        } catch(e) {}
+      });
+    }
+  })();
+  </script>
+
+  <!-- ─────────────── TOUR OVERLAY ─────────────── -->
+  <div id="tour-overlay">
+    <div class="modal-card !max-w-3xl w-[95%] space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-700/50 pb-4">
+        <h3 class="text-xl font-bold text-white">How AIFinance Pro Works</h3>
+        <button id="tour-close-btn" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-default">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Recurring Rules -->
+        <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+          <div class="flex items-center gap-3 mb-2">
+            <i class="fa-solid fa-repeat text-blue-400"></i>
+            <h4 class="font-semibold text-white">Recurring Rules</h4>
+          </div>
+          <p class="text-xs text-slate-400">Subscriptions and fixed bills are automatically detected and categorized. We spotted <span id="tour-rules-count" class="font-bold text-slate-200">...</span> patterns in your history.</p>
+        </div>
+        
+        <!-- Possible Matches -->
+        <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+          <div class="flex items-center gap-3 mb-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-violet-400"></i>
+            <h4 class="font-semibold text-white">Possible Matches</h4>
+          </div>
+          <p class="text-xs text-slate-400">AI suggests categories based on merchants. You have <span id="tour-matches-count" class="font-bold text-slate-200">...</span> transactions ready for quick approval.</p>
+        </div>
+        
+        <!-- Unknown Queue -->
+        <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+          <div class="flex items-center gap-3 mb-2">
+            <i class="fa-solid fa-circle-question text-amber-400"></i>
+            <h4 class="font-semibold text-white">Unknown Queue</h4>
+          </div>
+          <p class="text-xs text-slate-400">Unique or unclear merchants go to a queue. <span id="tour-unknown-count" class="font-bold text-slate-200">...</span> items need your manual review to train the AI.</p>
+        </div>
+        
+        <!-- Count From -->
+        <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+          <div class="flex items-center gap-3 mb-2">
+            <i class="fa-solid fa-calendar-check text-emerald-400"></i>
+            <h4 class="font-semibold text-white">Count From</h4>
+          </div>
+          <p class="text-xs text-slate-400">Your reporting begins from <span id="tour-date-count" class="font-bold text-slate-200">...</span> based on your uploaded history.</p>
+        </div>
+      </div>
+      
+      <div class="pt-2 flex justify-end">
+        <button onclick="document.getElementById('tour-close-btn').click()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-default">Get Started</button>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>
