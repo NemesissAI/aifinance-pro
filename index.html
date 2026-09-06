@@ -3372,13 +3372,73 @@
       return found;
     }
 
+    // Two builds share this file. The local single-user server has no
+    // `/api/data` — it serves the parsed statements as static files under
+    // `data/`. The hosted multi-user server has no `data/` directory to
+    // serve at all — every user's rows live in the database, scoped to
+    // whoever is logged in, behind `/api/data`. Try the hosted shape first;
+    // a 404 there means we're the local build, and the static-file path
+    // below is unchanged from before either server existed.
+    //
+    // This must stay the *only* place that loads "all of this user's
+    // statements" — every other view already reads through `months`, so a
+    // second loading path anywhere else would only ever be in sync by luck.
+    // Once the hosted API has answered successfully even once, this session
+    // is the hosted build — a later blip (a session cookie race on an early
+    // boot call, a dropped request) must not fall back to probing the local
+    // build's static file paths, which found 45 rounds of 404 in testing
+    // before this flag existed: `loadAll()` is called from five different
+    // places, and not every one of them waits for login to be confirmed.
+    let hostedConfirmed = false;
+    // `loadAll()` is called from five different places, and at boot several
+    // fire close enough together that a session-cookie race made every one
+    // of them lose independently — 45 duplicate 404s in testing, none of
+    // them a data problem, all of them the same handful of overlapping
+    // calls each restarting the probe from zero. Concurrent calls now share
+    // one in-flight request; a *later*, non-overlapping call (a fresh
+    // upload, the Reload button) still gets a brand new fetch.
+    let hostedProbe = null;
+
+    async function loadFromHostedApi() {
+      if (hostedProbe) return hostedProbe;
+      hostedProbe = (async () => {
+        try {
+          const res = await fetch('/api/data', { cache: 'no-store' });
+          if (!res.ok) return null;
+          const body = await res.json();
+          if (body && typeof body.months === 'object') { hostedConfirmed = true; return body.months; }
+          return null;
+        } catch { return null; }
+      })();
+      try { return await hostedProbe; } finally { hostedProbe = null; }
+    }
+
     async function loadAll({ quiet = false } = {}) {
+      const hosted = await loadFromHostedApi();
+      let added = 0;
+
+      if (hosted) {
+        const live = new Set(Object.keys(hosted));
+        months.keys().forEach(k => { if (!live.has(k)) months.remove(k); });
+        for (const [statementId, data] of Object.entries(hosted)) {
+          if (!Array.isArray(data.transactions) || !data.transactions.length) continue;
+          months.save(statementId, data);
+          added++;
+        }
+        if (added && !quiet) toast(`Loaded <strong>${added}</strong> statement${added === 1 ? '' : 's'}`, 'success');
+        return added;
+      }
+
+      // A confirmed-hosted session that hit a transient failure is still a
+      // hosted session — 0 for this attempt, not a downgrade into probing
+      // for local static files that were never going to exist here.
+      if (hostedConfirmed) return 0;
+
       const candidates = await discover();
       // Anything on disk is authoritative — drop cached entries whose file is gone.
       const live = new Set(candidates);
       months.keys().forEach(k => { if (!live.has(k)) months.remove(k); });
 
-      let added = 0;
       for (const file of candidates) {
         try {
           const res = await fetch(`data/${file}`, { cache: 'no-store' });
@@ -5522,7 +5582,15 @@
     // 9. CHAT + COACH answer from the real data
     // ─────────────────────────────────────────────────────────────────
     function answer(q) {
-      const txns = window.__realTxns || overrides.apply(months.allTxns());
+      // window.__realTxns is every row for the period — internal card
+      // payments, money held in trust, passthrough bridges, all mixed in
+      // with real spending. Not filtering here quantifies as: this account's
+      // real income for the period is ₺0, and the coach told the user they
+      // had "paid in ₺38.463,79" — entirely credit-card payments credited
+      // back to the card, none of it income. Same flow gate every other
+      // total in the app already uses.
+      const all = window.__realTxns || overrides.apply(months.allTxns());
+      const txns = all.filter(t => (t.flow || 'real') === 'real');
       if (!txns.length) return null;   // fall through to the canned replies
       const low = q.toLowerCase();
       const spend = txns.filter(t => t.type === 'expense');
@@ -5539,8 +5607,12 @@
       // "top" inside Turkish "toplam" (total), so "toplam ne kadar harcadım"
       // was answered with a top-merchants list.
       if (/(toplam|\btotal\b|ne kadar|how much|\bspent\b)/i.test(low)) {
+        const net = income - total;
+        // tl() takes Math.abs() — without the sign, a negative net (spent
+        // more than earned) printed as a plain positive number, which reads
+        // as "you came out ahead" for someone who did the opposite.
         return `💳 Across ${months.keys().length} imported statement(s): spent <strong>₺${tl(total)}</strong>, ` +
-          `paid in <strong>₺${tl(income)}</strong>. Net <strong>₺${tl(income - total)}</strong>.`;
+          `paid in <strong>₺${tl(income)}</strong>. Net <strong>${net < 0 ? '−' : ''}₺${tl(net)}</strong>.`;
       }
       if (/(en çok|\bmost\b|\btop\b|nereye|\bwhere\b|biggest merchant)/i.test(low)) {
         const t = rank(byMer).slice(0, 3);
@@ -7635,8 +7707,10 @@
             const dRes = await fetch('/api/data');
             if (dRes.ok) {
               const dJson = await dRes.json();
-              if (Array.isArray(dJson)) {
-                txs = dJson.flatMap(s => s.transactions || []);
+              // {months: {statementId: payload}}, not a bare array — see
+              // loadAll()'s loadFromHostedApi() for the same contract.
+              if (dJson && typeof dJson.months === 'object') {
+                txs = Object.values(dJson.months).flatMap(s => s.transactions || []);
               }
             }
           } catch(e) {}
