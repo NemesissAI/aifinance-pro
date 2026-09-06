@@ -153,6 +153,7 @@ async def me(user=Depends(current_user)):
     return user
 
 
+@app.get("/api/auth/google")
 @app.get("/api/auth/google/login")
 async def google_login(request: Request):
     """A navigation, not an API call — the button should point its href here
@@ -468,6 +469,7 @@ INDEX_HTML = ROOT / "index.html"
 
 
 @app.get("/")
+@app.get("/index.html")
 async def index():
     if not INDEX_HTML.is_file():
         raise HTTPException(404)
