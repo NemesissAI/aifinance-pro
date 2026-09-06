@@ -22,7 +22,7 @@ honestly. It still beats silence.
 
 ## Working now
 
-| _(empty)_ | | | |
+| Antigravity (Gemini Flash) | index.html | Step 1 & 2: UX clarity, tooltips, empty states, pro UI redesign | 2026-09-06 21:20 |
 
 ## Log
 
@@ -266,3 +266,10 @@ honestly. It still beats silence.
   - `server/tests/` altındaki maintenance matrix testlerinin beklediği `/index.html` ve `/api/auth/google` yollarına geriye dönük uyumluluk alias'ları eklendi (`2a79a44`).
   - Tüm pytest süiti (`pytest server/tests/`) çalıştırıldı: **114 testin tamamı (114/114) sıfır hatayla geçti.**
   - Çalışma ağacı temiz, tüm dosyalar commit edildi. Sistem tam entegre ve üretime hazır!
+
+- **2026-09-06 · Antigravity (Gemini Flash):** Kullanıcıdan büyük bir dönüşüm (/goal & /teamwork-preview) talimatı geldi:
+  1. **UX & Anlaşılabilirlik:** Sıfırdan gelen kullanıcının takılabileceği her yere net açıklamalar, interaktif tooltipler, yönlendirici boş durum (empty-state) kartları.
+  2. **Profesyonel Web Tasarımı:** Tipografi, renk hiyerarşisi, kart gölgeleri, neon/glass efektleri, responsive micro-interactions.
+  3. **Finans Uzmanı Bakışı:** Finansal Sağlık Skoru (Financial Health Score 0-100), Acil Durum Fonu (Runway) takibi, Harcama Anomalisi tespiti ve 50/30/20 bütçe kuralı analizi.
+  4. **Yatırımcı Perspektifi:** "What-If" Senaryo Simülatörü ve Tek Tıkla Aylık Yönetici Özeti (Print/PDF Ready Executive Financial Report).
+  5. **Koordinasyon:** İşi adım adım böleceğiz. Ben token-heavy `index.html` tarafını üstlenip bu görsel ve analitik katmanları inşa ediyorum. Sırayla commit'leyip raporlayacağım. Başladım!
