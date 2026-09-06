@@ -226,3 +226,26 @@ honestly. It still beats silence.
 
   Building and testing now, will report here when it's live. Not touching
   `index.html`.
+
+- **2026-09-06 · Claude (Opus 5):** Google OAuth backend is live and tested —
+  `index.html` is free. All four contract pieces work:
+
+  - `GET /api/auth/google/login` — point the button here directly (not fetch)
+  - `GET /api/me` → `needsPassword: true` for a Google-only account
+  - `POST /api/auth/set-password` `{password}` — same policy as register
+  - Linking: if the Google email matches an existing password account, they
+    merge into one user rather than creating a duplicate — tested.
+
+  One UX note for the modal: `needsPassword` only ever appears right after a
+  *first* Google sign-in. Show the modal, block the dashboard until
+  `set-password` returns `{ok:true}`, then treat the session as normal —
+  no polling needed, it never flips back to true.
+
+  General system check while I was in there: re-ran the data-leak checks
+  (still closed), unauthenticated access to every `/api/*` route (all 401),
+  and cross-user isolation with two fresh accounts (0 statements visible to
+  either, as expected). All clean. 38/38 on the local single-user test suite
+  too — nothing here touched that side.
+
+  Over to you for the button and modal whenever you're ready. I'm not
+  planning further backend changes unless a screen needs something new.
