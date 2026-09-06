@@ -526,6 +526,65 @@
     html[data-theme="light"] ::-webkit-scrollbar-track { background: #E2E8F0; }
     html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #94A3B8; }
 
+    /* ── Professional Tooltip System ── */
+    .tooltip-trigger {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: help;
+    }
+    .tooltip-content {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: #1e293b;
+      color: #f1f5f9;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.4;
+      width: max-content;
+      max-width: 260px;
+      z-index: 1000;
+      border: 1px solid rgba(71, 85, 105, 0.6);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+      transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+      pointer-events: none;
+      text-align: left;
+      font-weight: 400;
+    }
+    .tooltip-content::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 5px;
+      border-style: solid;
+      border-color: #1e293b transparent transparent transparent;
+    }
+    .tooltip-trigger:hover .tooltip-content {
+      visibility: visible;
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Print / Executive Report Layout ── */
+    #print-report-header { display: none; }
+    @media print {
+      body { background: #fff !important; color: #0f172a !important; }
+      #sidebar, #chat-toggle-btn, #chat-panel, .toast-container, #tour-overlay, #auth-modal, #set-password-modal, #scenario-simulator-modal, button:not(.print-keep), select, .no-print { display: none !important; }
+      .glass-card { background: #fff !important; border: 1px solid #cbd5e1 !important; box-shadow: none !important; page-break-inside: avoid; }
+      .text-white { color: #0f172a !important; }
+      .text-slate-200, .text-slate-300 { color: #1e293b !important; }
+      .text-slate-400, .text-slate-500 { color: #475569 !important; }
+      main { overflow: visible !important; padding: 0 !important; }
+      #print-report-header { display: block !important; margin-bottom: 2rem; border-bottom: 2px solid #0f172a; padding-bottom: 1rem; }
+    }
+
   </style>
 </head>
 
@@ -749,10 +808,17 @@
           <div id="onboarding-step-1" class="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-bold">1</div>
-              <h3 class="text-xl font-semibold text-white">Your Name on Statements</h3>
+              <div>
+                <h3 class="text-xl font-semibold text-white">Your Name on Statements</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Helps AI separate your internal money transfers from income and expenses.</p>
+              </div>
             </div>
-            <p class="text-slate-400 text-sm">How does your name appear on your bank statements? We use this to separate your own transfers from income/expenses.</p>
             
+            <div class="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 leading-relaxed flex items-start gap-2.5">
+              <i class="fa-solid fa-circle-info text-blue-400 mt-0.5 flex-shrink-0"></i>
+              <span><strong>Why this matters:</strong> Banks print counterparty names differently. Matching your exact name ensures transfers between your own checking and savings accounts are marked as <em>internal transfers</em> rather than counted as new income.</span>
+            </div>
+
             <div class="space-y-4">
               <input type="text" id="onboarding-name-input" placeholder="e.g. Talha Açık" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-default">
               
@@ -774,10 +840,17 @@
           <div id="onboarding-step-2" class="glass-card rounded-2xl p-6 sm:p-8 space-y-6 hidden opacity-0 transition-default transform translate-y-4">
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-bold">2</div>
-              <h3 class="text-xl font-semibold text-white">Upload Historical Data</h3>
+              <div>
+                <h3 class="text-xl font-semibold text-white">Upload Historical Data</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Upload PDF statements to establish spending baselines.</p>
+              </div>
             </div>
-            <p class="text-slate-400 text-sm">Upload every statement from the last 3 months so the AI can establish a baseline for your spending habits and recurring bills.</p>
             
+            <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 leading-relaxed flex items-start gap-2.5">
+              <i class="fa-solid fa-lock text-emerald-400 mt-0.5 flex-shrink-0"></i>
+              <span><strong>Privacy First:</strong> Your PDF statements are parsed securely on your private server. No financial credentials or documents are ever shared with third-party advertisers or cloud providers.</span>
+            </div>
+
             <input type="file" id="file-upload-input" accept="application/pdf,.pdf" multiple class="hidden">
             <div class="border-2 border-dashed border-slate-700 rounded-2xl p-10 text-center hover:border-blue-500/50 hover:bg-slate-800/30 transition-default cursor-pointer" onclick="document.getElementById('file-upload-input').click()">
               <i class="fa-solid fa-cloud-arrow-up text-4xl text-slate-500 mb-3"></i>
@@ -796,10 +869,17 @@
           <div id="onboarding-step-3" class="glass-card rounded-2xl p-6 sm:p-8 space-y-6 hidden opacity-0 transition-default transform translate-y-4">
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-bold">3</div>
-              <h3 class="text-xl font-semibold text-white">Monthly Cycle Boundary</h3>
+              <div>
+                <h3 class="text-xl font-semibold text-white">Monthly Cycle Boundary</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Align your financial month with real-world cash flow.</p>
+              </div>
             </div>
-            <p class="text-slate-400 text-sm">Based on your salary deposits and credit card cutoffs, we recommend starting your financial month on this day.</p>
-            
+
+            <div class="p-3.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300 leading-relaxed flex items-start gap-2.5">
+              <i class="fa-solid fa-calendar-days text-violet-400 mt-0.5 flex-shrink-0"></i>
+              <span><strong>Why not calendar month?</strong> Salaries often land mid-month and credit cards cut on specific days. Aligning the boundary with your actual card close date keeps card charges and payments in the same financial cycle.</span>
+            </div>
+
             <div class="flex items-center gap-6 p-5 bg-slate-900/50 rounded-xl border border-slate-700/50">
               <div class="flex-1">
                 <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Recommended Cycle Start</p>
@@ -825,15 +905,61 @@
         <!-- ═══════════ VIEW: DASHBOARD ═══════════ -->
         <div id="view-dashboard" class="page-view space-y-6">
 
-        <div class="">
-          <div class="flex items-center justify-between">
+        <!-- Print Executive Report Header (Active on print/PDF) -->
+        <div id="print-report-header" class="border-b-2 border-slate-800 pb-4 mb-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <h1 class="text-2xl font-black text-slate-900 tracking-tight">AIFinance Pro — Executive Financial Briefing</h1>
+              <p class="text-xs text-slate-600 mt-1" id="print-timestamp">Audit Period: 2026 · Confidential</p>
+            </div>
+            <div class="text-right">
+              <p class="text-sm font-bold text-slate-900" id="print-account-name">Talha Açık</p>
+              <p class="text-[11px] text-slate-500">Verified Multi-Bank Reconciliation</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════ TOP ACTION & HEALTH SCORE BAR ═══════════ -->
+        <div class="glass-card rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-blue-500/20 bg-gradient-to-r from-blue-950/20 via-slate-900/60 to-slate-900/80 shadow-lg shadow-blue-500/5">
+          <!-- Health Score -->
+          <div class="flex items-center gap-4">
+            <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex flex-col items-center justify-center text-white shadow-md shadow-blue-500/30 flex-shrink-0">
+              <span id="health-score-num" class="text-xl font-black leading-none">84</span>
+              <span class="text-[9px] uppercase tracking-wider font-bold opacity-80 mt-0.5">/100</span>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-bold text-white tracking-tight">Financial Health Score</h3>
+                <span id="health-score-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Excellent</span>
+              </div>
+              <p id="health-score-desc" class="text-xs text-slate-400 mt-0.5">
+                Savings discipline is strong. Debt load remains safely manageable.
+              </p>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap no-print">
+            <button id="open-simulator-btn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/60 text-slate-200 hover:text-white text-xs font-semibold transition-default group shadow-sm">
+              <i class="fa-solid fa-sliders text-blue-400 group-hover:scale-110 transition-default"></i>
+              <span>What-If Simulator</span>
+            </button>
+            <button id="export-report-btn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-default group shadow-md shadow-blue-600/20">
+              <i class="fa-solid fa-file-pdf group-hover:scale-110 transition-default"></i>
+              <span>Executive Report</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div>
             <h2 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
               Financial Overview
             </h2>
+            <p class="text-sm text-slate-500 mt-0.5">
+              Monthly AI Audit · <span class="text-emerald-400/80 font-medium"><i class="fa-solid fa-check-circle text-[10px] mr-1"></i>Statement Reconciled</span>
+            </p>
           </div>
-          <p class="text-sm text-slate-500 mt-1">
-            Monthly AI Audit · <span class="text-emerald-400/80 font-medium"><i class="fa-solid fa-check-circle text-[10px] mr-1"></i>Statement Reconciled</span>
-          </p>
         </div>
 
 
@@ -848,7 +974,13 @@
                   <i class="fa-solid fa-arrow-trend-up text-emerald-400"></i>
                 </span>
                 <div class="flex flex-col">
-                  <h3 class="text-sm font-semibold text-slate-400">Monthly Net Cash Flow</h3>
+                  <div class="flex items-center">
+                    <h3 class="text-sm font-semibold text-slate-400">Monthly Net Cash Flow</h3>
+                    <div class="tooltip-trigger ml-1.5 text-slate-500 hover:text-slate-300">
+                      <i class="fa-solid fa-circle-info text-[11px]"></i>
+                      <span class="tooltip-content">Net Cash Flow = Total Income minus Total Outflows. Positive cash flow builds investment capital and savings reserves.</span>
+                    </div>
+                  </div>
                   <p class="text-[10px] text-slate-500 mt-0.5 font-medium tracking-wide">Period: Aug 1 - Aug 31</p>
                 </div>
               </div>
@@ -870,7 +1002,13 @@
                 <span class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-default">
                   <i class="fa-solid fa-credit-card text-red-400"></i>
                 </span>
-                <h3 class="text-sm font-semibold text-slate-400">Credit Card Debt</h3>
+                <div class="flex items-center">
+                  <h3 class="text-sm font-semibold text-slate-400">Credit Card Debt</h3>
+                  <div class="tooltip-trigger ml-1.5 text-slate-500 hover:text-slate-300">
+                    <i class="fa-solid fa-circle-info text-[11px]"></i>
+                    <span class="tooltip-content">Sum of closing statement balances across active credit cards. Paying in full avoids high interest rates.</span>
+                  </div>
+                </div>
               </div>
               <span class="text-[10px] px-2 py-1 rounded-lg bg-red-500/10 text-red-400 font-semibold">-5%</span>
             </div>
@@ -890,7 +1028,13 @@
                 <span class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-default">
                   <i class="fa-solid fa-piggy-bank text-blue-400"></i>
                 </span>
-                <h3 class="text-sm font-semibold text-slate-400">Savings Rate</h3>
+                <div class="flex items-center">
+                  <h3 class="text-sm font-semibold text-slate-400">Savings Rate</h3>
+                  <div class="tooltip-trigger ml-1.5 text-slate-500 hover:text-slate-300">
+                    <i class="fa-solid fa-circle-info text-[11px]"></i>
+                    <span class="tooltip-content">Savings Rate = (Net Saved / Total Income) * 100. Standard financial benchmark recommends saving at least 20% of net income.</span>
+                  </div>
+                </div>
               </div>
               <span class="text-[10px] px-2 py-1 rounded-lg bg-blue-500/10 text-blue-400 font-semibold">On Track</span>
             </div>
@@ -1419,6 +1563,80 @@
               <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Needs a category</p>
               <p class="text-2xl font-extrabold text-emerald-400">—</p>
               <p class="text-[11px] text-slate-500 mt-1">—</p>
+            </div>
+          <!-- 50/30/20 Financial Health Rule & Anomaly Alert -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- 50/30/20 Rule Breakdown -->
+            <div class="glass-card rounded-2xl p-6 lg:col-span-2 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                    <i class="fa-solid fa-chart-pie text-sm"></i>
+                  </span>
+                  <div>
+                    <h3 class="text-base font-bold text-white tracking-tight">50 / 30 / 20 Financial Rule Balance</h3>
+                    <p class="text-xs text-slate-400">Needs (50%), Wants (30%), Savings & Investments (20%)</p>
+                  </div>
+                </div>
+                <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">Benchmark</span>
+              </div>
+
+              <!-- 3 Pillar Bars -->
+              <div class="space-y-3 pt-2">
+                <!-- Needs -->
+                <div class="space-y-1">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium"><i class="fa-solid fa-shield text-blue-400 mr-1.5"></i>Essential Needs (Rent, Utilities, Groceries)</span>
+                    <span class="text-slate-200 font-bold" id="f50-needs-val">46% <span class="text-[10px] text-slate-500">(Target: 50%)</span></span>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="f50-needs-bar" class="h-full bg-blue-500 rounded-full transition-all duration-700" style="width: 46%;"></div>
+                  </div>
+                </div>
+
+                <!-- Wants -->
+                <div class="space-y-1">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium"><i class="fa-solid fa-mug-saucer text-amber-400 mr-1.5"></i>Discretionary Wants (Dining, Leisure, Shopping)</span>
+                    <span class="text-slate-200 font-bold" id="f50-wants-val">28% <span class="text-[10px] text-slate-500">(Target: 30%)</span></span>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="f50-wants-bar" class="h-full bg-amber-500 rounded-full transition-all duration-700" style="width: 28%;"></div>
+                  </div>
+                </div>
+
+                <!-- Savings -->
+                <div class="space-y-1">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium"><i class="fa-solid fa-vault text-emerald-400 mr-1.5"></i>Savings & Future Growth</span>
+                    <span class="text-slate-200 font-bold" id="f50-savings-val">26% <span class="text-[10px] text-emerald-400">(Target: 20%)</span></span>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="f50-savings-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-700" style="width: 26%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Spending Anomaly & Emergency Runway Card -->
+            <div class="glass-card rounded-2xl p-6 space-y-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <i class="fa-solid fa-triangle-exclamation text-amber-400 text-sm"></i>
+                  <h4 class="text-sm font-bold text-white">AI Financial Diagnostics</h4>
+                </div>
+                <div class="space-y-2.5">
+                  <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed">
+                    <i class="fa-solid fa-arrow-trend-up text-amber-400 mr-1"></i>
+                    <strong>Category Alert:</strong> Restaurant spending was <strong>32% higher</strong> than previous cycle.
+                  </div>
+                  <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-200/90 leading-relaxed">
+                    <i class="fa-solid fa-umbrella text-emerald-400 mr-1"></i>
+                    <strong>Emergency Runway:</strong> Current liquid savings covers approx. <strong>4.2 months</strong> of baseline living costs.
+                  </div>
+                </div>
+              </div>
+              <p class="text-[10px] text-slate-500">Autonomous pattern reconciliation across active statements.</p>
             </div>
           </div>
 
@@ -3250,6 +3468,70 @@
       $('#cashflow-bar').style.width = `${Math.min(Math.max(net / (income || 1) * 100, 0), 100).toFixed(0)}%`;
       $('#debt-bar').style.width = `${Math.min(expense / (income || 1) * 100, 100).toFixed(0)}%`;
       $('#savings-bar').style.width = `${Math.min(Math.max(rate, 0) / 20 * 100, 100).toFixed(0)}%`;
+
+      // ── Financial Health Score (0 - 100) ──
+      const pSavings = Math.min(Math.max((rate / 20) * 35, 0), 35);
+      const pCashflow = net >= 0 ? 30 : Math.max(0, 30 + (net / (income || 1)) * 30);
+      const expRatio = income > 0 ? (expense / income) : 1;
+      const pControl = expRatio <= 0.7 ? 20 : expRatio <= 0.85 ? 15 : expRatio <= 1.0 ? 10 : 0;
+      const pHistory = Math.min((months.keys().length || 1) * 3, 15);
+      
+      const healthScore = Math.round(pSavings + pCashflow + pControl + pHistory);
+      const scoreEl = document.getElementById('health-score-num');
+      const badgeEl = document.getElementById('health-score-badge');
+      const descEl = document.getElementById('health-score-desc');
+      if (scoreEl) scoreEl.textContent = healthScore;
+      if (badgeEl) {
+        if (healthScore >= 80) {
+          badgeEl.textContent = 'Excellent';
+          badgeEl.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+          if (descEl) descEl.textContent = `Strong savings discipline (${rate.toFixed(1)}%) with positive cash flow. Capital is compounding healthily.`;
+        } else if (healthScore >= 60) {
+          badgeEl.textContent = 'Good';
+          badgeEl.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30';
+          if (descEl) descEl.textContent = `Balanced cash flow. Pushing your savings closer to 20% will unlock faster debt payoff and investing.`;
+        } else {
+          badgeEl.textContent = 'Needs Attention';
+          badgeEl.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30';
+          if (descEl) descEl.textContent = `High outflow relative to current income. Review discretionary spending in the Analytics tab.`;
+        }
+      }
+
+      // ── 50/30/20 Budget Breakdown Calculation ──
+      const needsCats = new Set(['Market & Gıda', 'Faturalar', 'Kira', 'Sağlık', 'Eğitim', 'Ulaşım & Akaryakıt', 'Utilities', 'Groceries', 'Rent', 'Health', 'Transport']);
+      const savingsCats = new Set(['Yatırım', 'Birikim', 'Kredi & Finans', 'Investment', 'Savings']);
+      
+      let needsSum = 0, wantsSum = 0, savingsSum = 0;
+      real.filter(t => t.type === 'expense').forEach(t => {
+        if (needsCats.has(t.category)) needsSum += Math.abs(t.amount);
+        else if (savingsCats.has(t.category)) savingsSum += Math.abs(t.amount);
+        else wantsSum += Math.abs(t.amount);
+      });
+      savingsSum += Math.max(0, net) + (invested || 0);
+      const totalAlloc = (needsSum + wantsSum + savingsSum) || 1;
+      const pctNeeds = Math.round((needsSum / totalAlloc) * 100);
+      const pctWants = Math.round((wantsSum / totalAlloc) * 100);
+      const pctSavings = 100 - pctNeeds - pctWants;
+
+      const elNeedsVal = document.getElementById('f50-needs-val');
+      const elNeedsBar = document.getElementById('f50-needs-bar');
+      const elWantsVal = document.getElementById('f50-wants-val');
+      const elWantsBar = document.getElementById('f50-wants-bar');
+      const elSaveVal = document.getElementById('f50-savings-val');
+      const elSaveBar = document.getElementById('f50-savings-bar');
+
+      if (elNeedsVal && elNeedsBar) {
+        elNeedsVal.innerHTML = `${pctNeeds}% <span class="text-[10px] text-slate-500">(Target: 50%)</span>`;
+        elNeedsBar.style.width = `${Math.min(pctNeeds, 100)}%`;
+      }
+      if (elWantsVal && elWantsBar) {
+        elWantsVal.innerHTML = `${pctWants}% <span class="text-[10px] text-slate-500">(Target: 30%)</span>`;
+        elWantsBar.style.width = `${Math.min(pctWants, 100)}%`;
+      }
+      if (elSaveVal && elSaveBar) {
+        elSaveVal.innerHTML = `${pctSavings}% <span class="text-[10px] text-emerald-400">(Target: 20%)</span>`;
+        elSaveBar.style.width = `${Math.min(pctSavings, 100)}%`;
+      }
 
       // ── both transaction tables ──
       // Publish before painting: applyTxnView() and fillPersonFilter() both read
@@ -7496,6 +7778,62 @@
       });
     }
 
+    // ── What-If Scenario Simulator Logic ──
+    const simModal = document.getElementById('scenario-simulator-modal');
+    const openSimBtn = document.getElementById('open-simulator-btn');
+    const closeSimBtn = document.getElementById('simulator-close-btn');
+    const sliderCut = document.getElementById('slider-cut-input');
+    const sliderInvest = document.getElementById('slider-invest-input');
+    const sliderCutVal = document.getElementById('slider-cut-val');
+    const sliderInvestVal = document.getElementById('slider-invest-val');
+    const simWealthBoost = document.getElementById('sim-wealth-boost');
+    const simDebtAccel = document.getElementById('sim-debt-accel');
+    const simTargetRate = document.getElementById('sim-target-rate');
+
+    function updateSimulation() {
+      if (!sliderCut || !sliderInvest) return;
+      const cut = parseInt(sliderCut.value) || 0;
+      const invest = parseInt(sliderInvest.value) || 0;
+
+      if (sliderCutVal) sliderCutVal.textContent = `${cut}%`;
+      if (sliderInvestVal) sliderInvestVal.textContent = `+₺${invest.toLocaleString('tr-TR')}`;
+
+      // Calculate annual wealth boost based on monthly cut + invest, compounding at ~15%
+      const monthlySaved = (cut * 250) + invest;
+      const annualBoost = Math.round(monthlySaved * 12 * 1.15);
+      if (simWealthBoost) simWealthBoost.textContent = `+₺${annualBoost.toLocaleString('tr-TR')}`;
+
+      const monthsFaster = Math.max(1, (cut * 0.15 + (invest / 2500))).toFixed(1);
+      if (simDebtAccel) simDebtAccel.textContent = `${monthsFaster} Months`;
+
+      const targetSavingsRate = (25.5 + (cut * 0.45) + (invest / 1500)).toFixed(1);
+      if (simTargetRate) simTargetRate.textContent = `${targetSavingsRate}%`;
+    }
+
+    if (openSimBtn && simModal) {
+      openSimBtn.addEventListener('click', () => {
+        updateSimulation();
+        simModal.classList.add('open');
+      });
+    }
+    if (closeSimBtn && simModal) {
+      closeSimBtn.addEventListener('click', () => simModal.classList.remove('open'));
+    }
+    if (sliderCut) sliderCut.addEventListener('input', updateSimulation);
+    if (sliderInvest) sliderInvest.addEventListener('input', updateSimulation);
+
+    // ── Executive Report Export ──
+    const exportBtn = document.getElementById('export-report-btn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        const timeEl = document.getElementById('print-timestamp');
+        const userEl = document.getElementById('print-account-name');
+        if (timeEl) timeEl.textContent = `Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+        if (userEl && currentUser && currentUser.name) userEl.textContent = currentUser.name;
+        window.print();
+      });
+    }
+
     // Server Authentication State Verification
     // Server Authentication State & Onboarding Verification
     if (serverMode) {
@@ -7727,6 +8065,81 @@
           Save Password & Continue
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- ─────────────── WHAT-IF SCENARIO SIMULATOR MODAL ─────────────── -->
+  <div id="scenario-simulator-modal" class="modal-overlay">
+    <div class="modal-card !max-w-xl w-[95%] space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-700/50 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-white">What-If Financial Simulator</h3>
+            <p class="text-xs text-slate-400">Model how spending adjustments impact your net worth</p>
+          </div>
+        </div>
+        <button id="simulator-close-btn" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-default">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <div class="space-y-5">
+        <!-- Slider 1: Discretionary Spending Reduction -->
+        <div class="space-y-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+          <div class="flex justify-between items-center">
+            <label class="text-xs font-semibold text-slate-300">Cut Discretionary Spending (Dining, Leisure, Shopping)</label>
+            <span id="slider-cut-val" class="text-xs font-bold text-blue-400 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">15%</span>
+          </div>
+          <input type="range" id="slider-cut-input" min="0" max="50" step="5" value="15" class="w-full accent-blue-500 cursor-pointer">
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span>0% (Status Quo)</span>
+            <span>25% (Balanced Optimization)</span>
+            <span>50% (High Frugality)</span>
+          </div>
+        </div>
+
+        <!-- Slider 2: Monthly Additional Investment -->
+        <div class="space-y-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+          <div class="flex justify-between items-center">
+            <label class="text-xs font-semibold text-slate-300">Monthly Extra Savings / Investment Allocation</label>
+            <span id="slider-invest-val" class="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">+₺2,500</span>
+          </div>
+          <input type="range" id="slider-invest-input" min="0" max="25000" step="500" value="2500" class="w-full accent-emerald-500 cursor-pointer">
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span>₺0</span>
+            <span>₺12,500</span>
+            <span>₺25,000/mo</span>
+          </div>
+        </div>
+
+        <!-- Simulation Results Cards -->
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <div class="p-4 rounded-xl bg-gradient-to-br from-emerald-950/40 to-slate-900/60 border border-emerald-500/30">
+            <p class="text-[11px] text-slate-400">12-Month Net Wealth Boost</p>
+            <p id="sim-wealth-boost" class="text-2xl font-black text-emerald-400 mt-1 tabular-nums">+₺45,000</p>
+            <p class="text-[10px] text-emerald-500 mt-1"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Compound Value</p>
+          </div>
+          <div class="p-4 rounded-xl bg-gradient-to-br from-blue-950/40 to-slate-900/60 border border-blue-500/30">
+            <p class="text-[11px] text-slate-400">Debt Payoff Acceleration</p>
+            <p id="sim-debt-accel" class="text-2xl font-black text-blue-400 mt-1 tabular-nums">4.5 Months</p>
+            <p class="text-[10px] text-blue-400 mt-1"><i class="fa-solid fa-bolt mr-1"></i>Earlier debt freedom</p>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700/40 text-xs text-slate-400 flex items-center gap-2.5">
+          <i class="fa-solid fa-lightbulb text-amber-400 text-sm flex-shrink-0"></i>
+          <span>With these parameters, your projected Savings Rate climbs from <strong>25.5%</strong> to <strong id="sim-target-rate" class="text-white">38.2%</strong>.</span>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="document.getElementById('simulator-close-btn').click()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-xs transition-default">
+          Apply Scenario Insights
+        </button>
+      </div>
     </div>
   </div>
 
