@@ -693,16 +693,32 @@
               <div class="hidden sm:block w-px h-8 bg-slate-700/50"></div>
 
               <!-- User Avatar & Info -->
-              <div class="flex items-center gap-3 pl-1">
+              <div class="relative flex items-center gap-3 pl-1">
                 <div class="hidden sm:block text-right">
-                  <p class="text-sm font-semibold text-slate-200 leading-tight">Talha Açık</p>
-                  <p class="text-[11px] text-slate-500">Premium Plan</p>
+                  <p id="header-user-name" class="text-sm font-semibold text-slate-200 leading-tight">Talha Açık</p>
+                  <p id="header-user-badge" class="text-[11px] text-slate-500">Premium Plan</p>
                 </div>
                 <div class="relative">
-                  <div id="user-avatar" class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-500/10 cursor-pointer">
+                  <div id="user-avatar" class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-500/10 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-default">
                     TK
                   </div>
-                  <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-900"></span>
+                  <span id="user-status-dot" class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-900"></span>
+                </div>
+
+                <!-- User Dropdown Menu -->
+                <div id="user-menu-dropdown" class="hidden absolute right-0 top-14 w-56 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-2 z-50 space-y-1 backdrop-blur-xl">
+                  <div class="px-3 py-2 border-b border-slate-800">
+                    <p id="dropdown-user-name" class="text-xs font-semibold text-white truncate">Talha Açık</p>
+                    <p id="dropdown-user-email" class="text-[11px] text-slate-500 truncate">user@example.com</p>
+                  </div>
+                  <button id="dropdown-auth-btn" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/10 rounded-xl transition-default">
+                    <i class="fa-solid fa-user text-xs"></i>
+                    <span id="dropdown-auth-btn-label">Switch Account / Sign In</span>
+                  </button>
+                  <button id="dropdown-signout-btn" class="hidden w-full items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-xl transition-default">
+                    <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                    <span>Sign Out</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -7231,24 +7247,308 @@
       } catch(e) {}
       
       endOnboarding();
-      showTour();
+      await showTour();
     });
 
-    // Tour Logic
+    // ── Tour Logic & Dynamic Metric Population ──
     const tourOverlay = document.getElementById('tour-overlay');
     const tourCloseBtn = document.getElementById('tour-close-btn');
     
-    function showTour() {
-      if(tourOverlay) tourOverlay.classList.add('open');
+    async function populateTourMetrics() {
+      try {
+        let txs = [];
+        if (window.__finData && window.__finData.core && window.__finData.core.transactions) {
+          txs = window.__finData.core.transactions;
+        }
+        if (serverMode) {
+          try {
+            const dRes = await fetch('/api/data');
+            if (dRes.ok) {
+              const dJson = await dRes.json();
+              if (Array.isArray(dJson)) {
+                txs = dJson.flatMap(s => s.transactions || []);
+              }
+            }
+          } catch(e) {}
+        }
+
+        // 1. Recurring rules: repeated merchants
+        const counts = {};
+        txs.forEach(t => {
+          const m = (t.merchant || t.counterpartyLabel || t.counterparty || '').trim();
+          if (m) counts[m] = (counts[m] || 0) + 1;
+        });
+        const recurringCount = Object.values(counts).filter(c => c >= 2).length;
+        const elRules = document.getElementById('tour-rules-count');
+        if (elRules) elRules.textContent = (recurringCount || 4) + ' detected';
+
+        // 2. Possible matches: categorised transactions
+        const matchesCount = txs.filter(t => t.category && t.category !== 'Uncertain').length;
+        const elMatches = document.getElementById('tour-matches-count');
+        if (elMatches) elMatches.textContent = (matchesCount || txs.length || 18) + ' matched';
+
+        // 3. Unknown queue: uncertain or uncategorised
+        const unknownCount = txs.filter(t => !t.category || t.category === 'Uncertain').length;
+        const elUnknown = document.getElementById('tour-unknown-count');
+        if (elUnknown) elUnknown.textContent = unknownCount + ' items';
+
+        // 4. Count from: earliest statement / transaction date
+        let earliestDate = 'Day 1';
+        if (txs.length > 0) {
+          const dates = txs.map(t => t.date).filter(Boolean).sort();
+          if (dates.length > 0) earliestDate = dates[0];
+        }
+        const elDate = document.getElementById('tour-date-count');
+        if (elDate) elDate.textContent = earliestDate;
+      } catch(e) {
+        console.error('Error populating tour metrics:', e);
+      }
+    }
+
+    async function showTour() {
+      await populateTourMetrics();
+      if (tourOverlay) tourOverlay.classList.add('open');
     }
     
-    if(tourCloseBtn) {
+    if (tourCloseBtn) {
       tourCloseBtn.addEventListener('click', async () => {
         tourOverlay.classList.remove('open');
         try {
-          await fetch('/api/onboarding/tour-done', {method: 'POST'});
+          await fetch('/api/onboarding/tour-done', { method: 'POST' });
         } catch(e) {}
       });
+    }
+
+    // ── Auth & Google Sign-In Modal Management ──
+    const authModal = document.getElementById('auth-modal');
+    const authCloseBtn = document.getElementById('auth-modal-close');
+    const authTabLogin = document.getElementById('auth-tab-login');
+    const authTabRegister = document.getElementById('auth-tab-register');
+    const authTitle = document.getElementById('auth-modal-title');
+    const authForm = document.getElementById('auth-form');
+    const authNameField = document.getElementById('auth-name-field');
+    const authNameInput = document.getElementById('auth-name-input');
+    const authEmailInput = document.getElementById('auth-email-input');
+    const authPasswordInput = document.getElementById('auth-password-input');
+    const authSubmitBtn = document.getElementById('auth-submit-btn');
+    const authErrorMsg = document.getElementById('auth-error-msg');
+    const setPasswordModal = document.getElementById('set-password-modal');
+    const setPasswordForm = document.getElementById('set-password-form');
+    const setPasswordInput = document.getElementById('set-password-input');
+    const setPasswordError = document.getElementById('set-password-error');
+    const setPasswordSubmitBtn = document.getElementById('set-password-submit-btn');
+
+    const userAvatar = document.getElementById('user-avatar');
+    const userMenuDropdown = document.getElementById('user-menu-dropdown');
+    const headerUserName = document.getElementById('header-user-name');
+    const headerUserBadge = document.getElementById('header-user-badge');
+    const dropdownUserName = document.getElementById('dropdown-user-name');
+    const dropdownUserEmail = document.getElementById('dropdown-user-email');
+    const dropdownAuthBtn = document.getElementById('dropdown-auth-btn');
+    const dropdownSignoutBtn = document.getElementById('dropdown-signout-btn');
+
+    let authMode = 'login'; // 'login' or 'register'
+    let currentUser = null;
+
+    function openAuthModal(mode = 'login') {
+      authMode = mode;
+      authErrorMsg.classList.add('hidden');
+      if (mode === 'login') {
+        authTitle.textContent = 'Sign In to AIFinance Pro';
+        authNameField.classList.add('hidden');
+        authTabLogin.className = 'flex-1 py-1.5 text-xs font-semibold text-white bg-slate-700/80 rounded-lg transition-default';
+        authTabRegister.className = 'flex-1 py-1.5 text-xs font-semibold text-slate-400 hover:text-white rounded-lg transition-default';
+        authSubmitBtn.textContent = 'Sign In';
+      } else {
+        authTitle.textContent = 'Create Account';
+        authNameField.classList.remove('hidden');
+        authTabRegister.className = 'flex-1 py-1.5 text-xs font-semibold text-white bg-slate-700/80 rounded-lg transition-default';
+        authTabLogin.className = 'flex-1 py-1.5 text-xs font-semibold text-slate-400 hover:text-white rounded-lg transition-default';
+        authSubmitBtn.textContent = 'Create Account';
+      }
+      if (authModal) authModal.classList.add('open');
+    }
+
+    function closeAuthModal() {
+      if (authModal) authModal.classList.remove('open');
+      authErrorMsg.classList.add('hidden');
+    }
+
+    if (authCloseBtn) authCloseBtn.addEventListener('click', closeAuthModal);
+    if (authTabLogin) authTabLogin.addEventListener('click', () => openAuthModal('login'));
+    if (authTabRegister) authTabRegister.addEventListener('click', () => openAuthModal('register'));
+
+    // Check for Google OAuth callback errors in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const authError = urlParams.get('auth_error');
+    if (authError) {
+      const errMap = {
+        'google_failed': 'Google sign-in was cancelled or encountered an error. Please try again.',
+        'google_no_email': 'Your Google account did not share an email address.',
+      };
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+      setTimeout(() => {
+        openAuthModal('login');
+        authErrorMsg.textContent = errMap[authError] || 'Authentication failed.';
+        authErrorMsg.classList.remove('hidden');
+      }, 300);
+    }
+
+    // Google Sign-In button click check
+    const googleBtn = document.getElementById('google-signin-btn');
+    if (googleBtn) {
+      googleBtn.addEventListener('click', async (e) => {
+        if (!serverMode) {
+          e.preventDefault();
+          alert('Google Sign-In is available when running the multi-user server (port 8000).');
+          return;
+        }
+      });
+    }
+
+    // Auth Form submit (Login / Register)
+    if (authForm) {
+      authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        authErrorMsg.classList.add('hidden');
+        authSubmitBtn.disabled = true;
+        const origText = authSubmitBtn.textContent;
+        authSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Processing…';
+
+        const endpoint = authMode === 'login' ? '/api/login' : '/api/register';
+        const formData = new FormData();
+        formData.append('email', authEmailInput.value.trim());
+        formData.append('password', authPasswordInput.value);
+        if (authMode === 'register') {
+          formData.append('name', authNameInput.value.trim());
+        }
+
+        try {
+          const res = await fetch(endpoint, { method: 'POST', body: formData });
+          const data = await res.json();
+          if (!res.ok) {
+            authErrorMsg.textContent = data.detail || 'Authentication failed.';
+            authErrorMsg.classList.remove('hidden');
+          } else {
+            closeAuthModal();
+            // If registered, auto login or reload
+            if (authMode === 'register') {
+              // Try login immediately
+              const loginForm = new FormData();
+              loginForm.append('email', authEmailInput.value.trim());
+              loginForm.append('password', authPasswordInput.value);
+              await fetch('/api/login', { method: 'POST', body: loginForm });
+            }
+            window.location.reload();
+          }
+        } catch(err) {
+          authErrorMsg.textContent = 'Server connection failed.';
+          authErrorMsg.classList.remove('hidden');
+        } finally {
+          authSubmitBtn.disabled = false;
+          authSubmitBtn.textContent = origText;
+        }
+      });
+    }
+
+    // Set Password Form submit (Required after Google Sign-In)
+    if (setPasswordForm) {
+      setPasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        setPasswordError.classList.add('hidden');
+        setPasswordSubmitBtn.disabled = true;
+        setPasswordSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving…';
+
+        try {
+          const res = await fetch('/api/auth/set-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: setPasswordInput.value })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setPasswordError.textContent = data.detail || 'Password rejected.';
+            setPasswordError.classList.remove('hidden');
+          } else {
+            setPasswordModal.classList.remove('open');
+            window.location.reload();
+          }
+        } catch(err) {
+          setPasswordError.textContent = 'Connection error.';
+          setPasswordError.classList.remove('hidden');
+        } finally {
+          setPasswordSubmitBtn.disabled = false;
+          setPasswordSubmitBtn.textContent = 'Save Password & Continue';
+        }
+      });
+    }
+
+    // User Avatar & Dropdown interactions
+    if (userAvatar && userMenuDropdown) {
+      userAvatar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        userMenuDropdown.classList.toggle('hidden');
+      });
+      document.addEventListener('click', () => {
+        userMenuDropdown.classList.add('hidden');
+      });
+    }
+
+    if (dropdownAuthBtn) {
+      dropdownAuthBtn.addEventListener('click', () => {
+        userMenuDropdown.classList.add('hidden');
+        openAuthModal('login');
+      });
+    }
+
+    if (dropdownSignoutBtn) {
+      dropdownSignoutBtn.addEventListener('click', async () => {
+        userMenuDropdown.classList.add('hidden');
+        try {
+          await fetch('/api/logout', { method: 'POST' });
+        } catch(e) {}
+        window.location.reload();
+      });
+    }
+
+    // Server Authentication State Verification
+    if (serverMode) {
+      try {
+        const meRes = await fetch('/api/me');
+        if (meRes.ok) {
+          currentUser = await meRes.json();
+          const displayName = currentUser.name || currentUser.email.split('@')[0];
+          if (headerUserName) headerUserName.textContent = displayName;
+          if (dropdownUserName) dropdownUserName.textContent = displayName;
+          if (dropdownUserEmail) dropdownUserEmail.textContent = currentUser.email;
+          if (headerUserBadge) headerUserBadge.textContent = 'Verified Account';
+
+          // Initials
+          const parts = displayName.split(' ');
+          const initials = (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+          if (userAvatar) userAvatar.textContent = initials;
+
+          // Dropdown buttons
+          if (dropdownSignoutBtn) dropdownSignoutBtn.classList.remove('hidden');
+          if (dropdownAuthBtn) dropdownAuthBtn.classList.add('hidden');
+
+          // Check if Google-only account needs password
+          if (currentUser.needsPassword) {
+            if (setPasswordModal) setPasswordModal.classList.add('open');
+          }
+        } else if (meRes.status === 401) {
+          if (headerUserName) headerUserName.textContent = 'Guest';
+          if (headerUserBadge) headerUserBadge.textContent = 'Not Signed In';
+          if (dropdownUserName) dropdownUserName.textContent = 'Guest User';
+          if (dropdownUserEmail) dropdownUserEmail.textContent = 'Sign in to sync statements';
+          if (userAvatar) userAvatar.textContent = '??';
+          if (dropdownSignoutBtn) dropdownSignoutBtn.classList.add('hidden');
+          if (dropdownAuthBtn) dropdownAuthBtn.classList.remove('hidden');
+        }
+      } catch(e) {
+        console.warn('Could not verify server auth state:', e);
+      }
     }
   })();
   </script>
@@ -7304,6 +7604,103 @@
       <div class="pt-2 flex justify-end">
         <button onclick="document.getElementById('tour-close-btn').click()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-default">Get Started</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ─────────────── AUTH MODAL ─────────────── -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal-card !max-w-md w-[95%] space-y-5">
+      <div class="flex items-center justify-between border-b border-slate-700/50 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+            <i class="fa-solid fa-lock text-sm"></i>
+          </div>
+          <h3 id="auth-modal-title" class="text-lg font-bold text-white">Sign In to AIFinance Pro</h3>
+        </div>
+        <button id="auth-modal-close" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-default">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Google Sign In Button -->
+      <a href="/api/auth/google/login" id="google-signin-btn" class="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-slate-100 text-slate-800 font-semibold rounded-xl text-sm transition-default shadow-sm group">
+        <svg class="w-4 h-4" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Continue with Google</span>
+      </a>
+
+      <!-- Divider -->
+      <div class="flex items-center gap-3">
+        <div class="flex-1 h-px bg-slate-800"></div>
+        <span class="text-[11px] text-slate-500 uppercase font-medium">or continue with email</span>
+        <div class="flex-1 h-px bg-slate-800"></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex rounded-xl bg-slate-800/80 p-1">
+        <button id="auth-tab-login" type="button" class="flex-1 py-1.5 text-xs font-semibold text-white bg-slate-700/80 rounded-lg transition-default">Sign In</button>
+        <button id="auth-tab-register" type="button" class="flex-1 py-1.5 text-xs font-semibold text-slate-400 hover:text-white rounded-lg transition-default">Create Account</button>
+      </div>
+
+      <!-- Auth Form -->
+      <form id="auth-form" class="space-y-3.5">
+        <div id="auth-name-field" class="space-y-1 hidden">
+          <label class="text-xs text-slate-400">Full Name</label>
+          <input type="text" id="auth-name-input" placeholder="e.g. Talha Açık" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Email Address</label>
+          <input type="email" id="auth-email-input" required placeholder="you@example.com" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Password</label>
+          <input type="password" id="auth-password-input" required placeholder="••••••••" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+        </div>
+
+        <div id="auth-error-msg" class="text-xs text-red-400 hidden"></div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-default">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ─────────────── SET PASSWORD MODAL ─────────────── -->
+  <div id="set-password-modal" class="modal-overlay">
+    <div class="modal-card !max-w-md w-[95%] space-y-5">
+      <div class="flex items-center gap-3 border-b border-slate-700/50 pb-3">
+        <div class="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+          <i class="fa-solid fa-key"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">Choose a Password</h3>
+          <p class="text-xs text-slate-400">Finish setting up your account</p>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-400 leading-relaxed">
+        AIFinance Pro requires a local password for your account. If your Google link is ever revoked or disconnected, your categorization work and statements remain safe.
+      </p>
+
+      <form id="set-password-form" class="space-y-3.5">
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">New Password</label>
+          <input type="password" id="set-password-input" required placeholder="At least 12 characters" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50">
+        </div>
+
+        <div id="set-password-error" class="text-xs text-red-400 hidden"></div>
+
+        <button type="submit" id="set-password-submit-btn" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-sm transition-default">
+          Save Password & Continue
+        </button>
+      </form>
     </div>
   </div>
 
