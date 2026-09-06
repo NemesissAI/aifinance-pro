@@ -7103,22 +7103,6 @@
       serverMode = resp.ok;
     } catch(e) {}
 
-    // 1. Initial State Check
-    if (serverMode) {
-      try {
-        const resp = await fetch('/api/onboarding/status');
-        if (resp.ok) {
-          const status = await resp.json();
-          if (!status.hasName || status.step < 4) {
-            startOnboarding();
-            if (status.hasName) showStep(2);
-          }
-        }
-      } catch(e) { console.error('Failed to get onboarding status', e); }
-    } else {
-      // Local mode just skips onboarding
-    }
-
     function startOnboarding() {
       // Hide all standard views and nav
       document.querySelectorAll('.page-view').forEach(v => v.classList.add('hidden'));
@@ -7513,6 +7497,7 @@
     }
 
     // Server Authentication State Verification
+    // Server Authentication State & Onboarding Verification
     if (serverMode) {
       try {
         const meRes = await fetch('/api/me');
@@ -7533,9 +7518,47 @@
           if (dropdownSignoutBtn) dropdownSignoutBtn.classList.remove('hidden');
           if (dropdownAuthBtn) dropdownAuthBtn.classList.add('hidden');
 
-          // Check if Google-only account needs password
+          // 1. Check if Google-only account needs password
           if (currentUser.needsPassword) {
             if (setPasswordModal) setPasswordModal.classList.add('open');
+            return;
+          }
+
+          // 2. Check Onboarding status
+          try {
+            const statusRes = await fetch('/api/onboarding/status');
+            if (statusRes.ok) {
+              const status = await statusRes.json();
+              if (status.step !== 'done') {
+                startOnboarding();
+                if (status.step === 'name') {
+                  showStep(1);
+                } else if (status.step === 'upload') {
+                  showStep(2);
+                } else if (status.step === 'cycle-day') {
+                  showStep(3);
+                  try {
+                    const cRes = await fetch('/api/onboarding/cycle-day');
+                    if (cRes.ok) {
+                      const cData = await cRes.json();
+                      const recEl = document.getElementById('onboarding-cycle-recommendation');
+                      const inputEl = document.getElementById('onboarding-cycle-input');
+                      const noteEl = document.getElementById('onboarding-cycle-note');
+                      if (cData.ready && cData.recommended) {
+                        recEl.innerText = ordinal(cData.recommended);
+                        inputEl.value = cData.recommended;
+                        if (noteEl) noteEl.classList.add('hidden');
+                      }
+                    }
+                  } catch(e) {}
+                } else if (status.step === 'tour') {
+                  endOnboarding();
+                  await showTour();
+                }
+              }
+            }
+          } catch(e) {
+            console.error('Failed to get onboarding status:', e);
           }
         } else if (meRes.status === 401) {
           if (headerUserName) headerUserName.textContent = 'Guest';
@@ -7545,6 +7568,9 @@
           if (userAvatar) userAvatar.textContent = '??';
           if (dropdownSignoutBtn) dropdownSignoutBtn.classList.add('hidden');
           if (dropdownAuthBtn) dropdownAuthBtn.classList.remove('hidden');
+
+          // Auto open Auth Modal on server mode when unauthenticated
+          openAuthModal('login');
         }
       } catch(e) {
         console.warn('Could not verify server auth state:', e);
