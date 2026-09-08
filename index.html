@@ -8374,5 +8374,71 @@
     </div>
   </div>
 
+  <!-- Telemetry System -->
+  <script>
+    (function() {
+      if (!window.__serverMode) return; // Only track in server mode
+
+      let sessionStartTime = Date.now();
+      let usedFeatures = new Set();
+      
+      // Hook into clicks to track features
+      document.addEventListener('click', (e) => {
+        const target = e.target.closest('[id]');
+        if (!target) return;
+        const id = target.id;
+        
+        if (id === 'nav-ai-coach') usedFeatures.add('AI Coach');
+        if (id === 'nav-analytics') usedFeatures.add('Analytics');
+        if (id === 'open-simulator-btn') usedFeatures.add('What-If Simulator');
+        if (id === 'print-export-btn') usedFeatures.add('Print Export');
+        if (id === 'upload-pdf-btn') usedFeatures.add('PDF Upload');
+      });
+
+      async function sendTelemetry() {
+        const now = Date.now();
+        const spentSeconds = Math.floor((now - sessionStartTime) / 1000);
+        if (spentSeconds < 5) return; // don't send if too short
+        
+        try {
+          const res = await fetch('/api/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              time_spent: spentSeconds,
+              features: Array.from(usedFeatures)
+            })
+          });
+          if (res.ok) {
+            // Reset timer after successful send
+            sessionStartTime = Date.now();
+            usedFeatures.clear();
+          }
+        } catch (err) {
+          // Ignore errors, will retry on next tick
+        }
+      }
+
+      // Send telemetry every 30 seconds
+      setInterval(sendTelemetry, 30000);
+      
+      // Try to send one last time on page unload
+      window.addEventListener('beforeunload', () => {
+        const spentSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+        if (spentSeconds >= 5) {
+          // Use keepalive for reliable beacon
+          fetch('/api/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              time_spent: spentSeconds,
+              features: Array.from(usedFeatures)
+            }),
+            keepalive: true
+          }).catch(e => {});
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

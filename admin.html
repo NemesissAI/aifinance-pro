@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Creator Dashboard - AIFinance Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
+    /* Loaders */
+    .loader {
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 antialiased min-h-screen p-6 custom-scrollbar">
+
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto flex items-center justify-between mb-8">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <i class="fa-solid fa-crown text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl font-bold text-white tracking-tight">Creator Dashboard</h1>
+        <p class="text-xs text-slate-400 uppercase tracking-widest font-medium">Platform Analytics & Users</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <button onclick="window.location.href='/'" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium transition-colors">
+        <i class="fa-solid fa-arrow-left mr-2"></i> Back to App
+      </button>
+      <button id="refresh-btn" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-lg shadow-blue-500/20 transition-colors flex items-center gap-2">
+        <i class="fa-solid fa-rotate-right"></i> Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Top Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="glass-card rounded-2xl p-6">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Users</p>
+        <p class="text-3xl font-bold text-white" id="stat-users">-</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Statements</p>
+        <p class="text-3xl font-bold text-blue-400" id="stat-statements">-</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Avg Time / User</p>
+        <p class="text-3xl font-bold text-emerald-400" id="stat-time">-</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total App Time</p>
+        <p class="text-3xl font-bold text-purple-400" id="stat-total-time">-</p>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="p-6 border-b border-slate-700/50 flex justify-between items-center">
+        <h2 class="text-lg font-bold text-white"><i class="fa-solid fa-users text-slate-400 mr-2"></i> User Details</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-400">
+          <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 border-b border-slate-700/50">
+            <tr>
+              <th scope="col" class="px-6 py-4 font-semibold">User</th>
+              <th scope="col" class="px-6 py-4 font-semibold">Statements</th>
+              <th scope="col" class="px-6 py-4 font-semibold">Time Spent</th>
+              <th scope="col" class="px-6 py-4 font-semibold">Features Used</th>
+              <th scope="col" class="px-6 py-4 font-semibold">Role</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody" class="divide-y divide-slate-800/60">
+            <tr>
+              <td colspan="5" class="px-6 py-12 text-center text-slate-500">
+                <div class="flex flex-col items-center justify-center">
+                  <div class="loader mb-4"></div>
+                  <p>Loading users...</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    function formatTime(seconds) {
+      if (!seconds) return '0m';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m`;
+    }
+
+    async function loadDashboard() {
+      const tbody = document.getElementById('users-tbody');
+      try {
+        const res = await fetch('/api/admin/dashboard');
+        if (res.status === 401 || res.status === 403) {
+          tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-red-400"><i class="fa-solid fa-lock text-3xl mb-3 block"></i> Access Denied. You must be an admin.</td></tr>`;
+          return;
+        }
+        if (!res.ok) throw new Error('Failed to load');
+        const users = await res.json();
+        
+        let totalTime = 0;
+        let totalStatements = 0;
+
+        tbody.innerHTML = users.length ? '' : `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-500">No users found.</td></tr>`;
+        
+        users.forEach(u => {
+          totalTime += (u.total_time_seconds || 0);
+          totalStatements += (u.statement_count || 0);
+
+          const featuresHtml = (u.features_used || []).map(f => 
+            `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">${f}</span>`
+          ).join(' ');
+
+          const isAdminBadge = u.is_admin ? `<span class="px-2 py-1 bg-purple-500/20 text-purple-400 text-[10px] font-bold rounded uppercase">Admin</span>` : `<span class="px-2 py-1 bg-slate-800 text-slate-500 text-[10px] font-bold rounded uppercase">User</span>`;
+
+          const row = `
+            <tr class="hover:bg-slate-800/30 transition-colors">
+              <td class="px-6 py-4">
+                <div class="flex flex-col">
+                  <span class="text-white font-medium">${u.name || 'Anonymous'}</span>
+                  <span class="text-xs">${u.email}</span>
+                </div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 font-bold text-xs">${u.statement_count || 0}</span>
+              </td>
+              <td class="px-6 py-4 font-medium text-emerald-400">
+                ${formatTime(u.total_time_seconds)}
+              </td>
+              <td class="px-6 py-4 flex flex-wrap gap-1">
+                ${featuresHtml || '<span class="text-slate-600 text-xs italic">None</span>'}
+              </td>
+              <td class="px-6 py-4">
+                ${isAdminBadge}
+              </td>
+            </tr>
+          `;
+          tbody.innerHTML += row;
+        });
+
+        document.getElementById('stat-users').textContent = users.length;
+        document.getElementById('stat-statements').textContent = totalStatements;
+        document.getElementById('stat-total-time').textContent = formatTime(totalTime);
+        document.getElementById('stat-time').textContent = users.length ? formatTime(totalTime / users.length) : '0m';
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-red-400">Error loading dashboard data.</td></tr>`;
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
+    loadDashboard();
+  </script>
+</body>
+</html>
