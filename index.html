@@ -1564,6 +1564,11 @@
               <p class="text-2xl font-extrabold text-emerald-400">—</p>
               <p class="text-[11px] text-slate-500 mt-1">—</p>
             </div>
+          </div><!-- /4-stat grid — this close was missing, which nested every
+                     view after Analytics (AI Coach, Settings) inside Analytics'
+                     own hidden container. Root cause of both tabs rendering
+                     as a blank screen regardless of their own visibility state. -->
+
           <!-- 50/30/20 Financial Health Rule & Anomaly Alert -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <!-- 50/30/20 Rule Breakdown -->
@@ -2743,7 +2748,18 @@
         const b = e.target.closest('button[data-act]');
         if (!b) return;
         menu.classList.add('hidden');
-        if (b.dataset.act === 'signout') return toast('Signed out of this demo session', 'info');
+        if (b.dataset.act === 'signout') {
+          // Was a stub from the single-user era: showed a toast claiming
+          // "signed out" and did nothing else — no /api/logout call, no
+          // session cleared, no redirect. A second, correctly wired sign-out
+          // button already exists (dropdown-signout-btn) — this makes the
+          // two identical instead of leaving a fake one live at all.
+          (async () => {
+            try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+            window.location.reload();
+          })();
+          return;
+        }
         window.switchView && window.switchView('nav-settings');
       });
       registerPopover(menu, avatar);
