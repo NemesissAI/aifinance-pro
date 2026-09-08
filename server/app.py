@@ -501,3 +501,57 @@ async def index():
 
 if (ROOT / "logos").is_dir():
     app.mount("/logos", StaticFiles(directory=str(ROOT / "logos")), name="logos")
+
+class TelemetryData(BaseModel):
+    time_spent: int
+    features: list[str] = []
+
+@app.post("/api/telemetry")
+def api_telemetry(data: TelemetryData, req: Request, db: Session = Depends(get_db)):
+    u = current_user(req, db)
+    if not u:
+        return {}
+    import json
+    u.total_time_seconds += data.time_spent
+    try:
+        existing = u.features_used if isinstance(u.features_used, list) else json.loads(u.features_used)
+    except:
+        existing = []
+    if not isinstance(existing, list):
+        existing = []
+    new_feats = list(set(existing + data.features))
+    u.features_used = new_feats
+    db.commit()
+    return {"status": "ok"}
+
+@app.get("/api/admin/dashboard")
+def admin_dashboard(req: Request, db: Session = Depends(get_db)):
+    u = current_user(req, db)
+    if not u or not u.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from sqlalchemy import func
+    users = db.query(User).all()
+    results = []
+    import json
+    for user in users:
+        stmt_count = db.query(func.count(Statement.id)).filter_by(user_id=user.id).scalar()
+        try:
+            feats = user.features_used if isinstance(user.features_used, list) else json.loads(user.features_used)
+        except:
+            feats = []
+        if not isinstance(feats, list):
+            feats = []
+        results.append({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "total_time_seconds": user.total_time_seconds,
+            "features_used": feats,
+            "statement_count": stmt_count,
+            "is_admin": bool(user.is_admin)
+        })
+    return results
+
+@app.get("/admin")
+def serve_admin():
+    return FileResponse("admin.html")

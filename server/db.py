@@ -48,6 +48,11 @@ class User(Base):
     # requires a password, so the sign-up flow never leaves this null.
     password_hash = Column(Text, nullable=True)
     google_sub = Column(String(64), unique=True, nullable=True, index=True)
+
+    # Telemetry and Admin
+    is_admin = Column(Integer, default=0, nullable=False)
+    total_time_seconds = Column(Integer, default=0, nullable=False)
+    features_used = Column(JSON, default=list)
     # The user's own rules — who they are, who pays them, whose money they hold.
     # Never shared, never defaulted from anyone else's.
     profile = Column(JSON, default=dict)
