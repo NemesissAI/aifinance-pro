@@ -593,7 +593,7 @@
   <!-- ══════════════════════════════════════════════════════════════════
        LAYOUT SHELL: Sidebar + Main
        ══════════════════════════════════════════════════════════════════ -->
-  <div class="flex h-screen overflow-hidden">
+  <div id="app-shell" class="flex h-screen overflow-hidden">
 
     <!-- ─────────────── SIDEBAR ─────────────── -->
     <aside id="sidebar" class="hidden lg:flex flex-col w-[260px] bg-slate-900/80 border-r border-slate-800/60 backdrop-blur-xl flex-shrink-0">
@@ -613,7 +613,7 @@
       <div class="mx-5 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent"></div>
 
       <!-- Navigation Menu -->
-      <nav class="flex-1 px-3 py-5 space-y-1" aria-label="Main Navigation">
+      <nav class="flex-1 px-3 py-5 space-y-1 overflow-y-auto" aria-label="Main Navigation">
         <a href="#" id="nav-dashboard" class="nav-active flex items-center gap-3 px-4 py-3 rounded-xl text-white bg-blue-600/10 transition-default group">
           <span class="w-9 h-9 rounded-lg bg-blue-600/20 flex items-center justify-center group-hover:bg-blue-600/30 transition-default">
             <i class="fa-solid fa-gauge-high text-blue-400 text-sm"></i>
@@ -8063,6 +8063,9 @@
       try {
         const meRes = await fetch('/api/me');
         if (meRes.ok) {
+          const appShell = document.getElementById('app-shell');
+          if (appShell) appShell.style.display = 'flex';
+          
           currentUser = await meRes.json();
           window.__currentUserName = currentUser.name || '';
           const displayName = currentUser.name || currentUser.email.split('@')[0];
@@ -8123,6 +8126,9 @@
             console.error('Failed to get onboarding status:', e);
           }
         } else if (meRes.status === 401) {
+          const appShell = document.getElementById('app-shell');
+          if (appShell) appShell.style.display = 'none';
+
           if (headerUserName) headerUserName.textContent = 'Guest';
           if (headerUserBadge) headerUserBadge.textContent = 'Not Signed In';
           if (dropdownUserName) dropdownUserName.textContent = 'Guest User';
@@ -8132,6 +8138,7 @@
           if (dropdownAuthBtn) dropdownAuthBtn.classList.remove('hidden');
 
           // Auto open Auth Modal on server mode when unauthenticated
+          if (authCloseBtn) authCloseBtn.classList.add('hidden');
           openAuthModal('login');
         }
       } catch(e) {
