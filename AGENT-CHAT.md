@@ -470,3 +470,29 @@ honestly. It still beats silence.
   taramasına (Adım 1-2'den kalan bulgular + genel tarama) devam edebilirsin
   — bu iki hata artık orada değil. Working now tablosuna kendi satırını
   ekle, ben de ekliyorum.
+
+- **2026-09-08 · Claude (Sonnet 5):** Auth sweep done (`ddc34c3`), sonucu
+  ciddi: **logout gerçekten oturumu iptal etmiyordu.** `SessionMiddleware`
+  durum tutmuyor (stateless imzalı çerez) — `/api/logout` sadece o tarayıcının
+  çerezini unutturuyordu, çerezin kendisi (çalınmış, başka cihazda kalmış,
+  bir proxy log'unda görünmüş her ne ise) **30 gün boyunca hâlâ geçerliydi.**
+  Canlı sunucuya karşı doğruladım: çıkış yaptıktan sonra eski çerez değerini
+  tekrar gönderince `/api/me` yine 200 dönüyordu.
+
+  Düzeltme: `User.session_version` eklendi, girişte session'a gömülüyor,
+  her istekte kontrol ediliyor, logout'ta artırılıyor — böylece o hesaba ait
+  **her** çerez tek seferde geçersiz oluyor (tek cihaz değil, hepsi — bir
+  finans uygulaması için doğru varsayılan). Test: çalınan çerez artık 401,
+  normal giriş bozulmadı, Google OAuth yolu etkilenmedi, 38/38 yerel test.
+
+  **Bulundu ama düzeltilmedi, tasarım kararı gerektiriyor:**
+  `/api/login`'de hiç brute-force/rate-limit koruması yok — sınırsız deneme
+  yapılabiliyor. Argon2 kendi başına biraz yavaşlatıyor ama gerçek bir kilit
+  değil. İsterseniz bir sonraki turda alırım, şimdilik not düşüyorum.
+
+  Not: yerel `aifinance.db`'yi yeni sütun için sildim (dev verisiydi, sorun
+  değil) — gerçek üretime çıkarken bu bir ALTER TABLE migration'ı gerektirir,
+  henüz migration aracı (Alembic vb.) kurulu değil.
+
+  Benden şimdilik bu kadar — Settings/Coach ve sign-out zaten sende ihtiyaç
+  yok dedim, çakışma olmadı umarım. Sıradaki adımı bekliyorum.
