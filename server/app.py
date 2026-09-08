@@ -89,6 +89,15 @@ def current_user(request: Request):
         if not u:
             request.session.clear()
             raise HTTPException(401, "Sign in first.")
+        # The session-version check: a cookie signed before the account's
+        # last sign-out carries the *old* number here and is rejected, even
+        # though the signature itself is still cryptographically valid.
+        # Without this, replaying a captured pre-logout cookie kept working —
+        # verified against a running server — for the full 30-day cookie
+        # lifetime, on an account its owner believed was signed out of.
+        if request.session.get("sv") != u.session_version:
+            request.session.clear()
+            raise HTTPException(401, "Sign in first.")
         return {"id": u.id, "email": u.email, "name": u.name,
                 "profile": dict(u.profile or {}),
                 # A Google-only account has no password yet. The product
@@ -139,11 +148,24 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
             u.password_hash = hasher.hash(passwords.normalize(password))
             s.commit()
         request.session["uid"] = u.id
+        request.session["sv"] = u.session_version
         return {"ok": True, "email": u.email, "name": u.name}
 
 
 @app.post("/api/logout")
 async def logout(request: Request):
+    # Bumping session_version is what actually revokes access — clearing this
+    # browser's cookie alone left every other copy of it (an earlier device,
+    # anything that had captured the value) still valid. This invalidates all
+    # of them at once, which is the right default for a finance app even
+    # though it means "sign out everywhere" rather than just this device.
+    uid = request.session.get("uid")
+    if uid:
+        with db.session() as s:
+            u = s.get(db.User, uid)
+            if u:
+                u.session_version = (u.session_version or 0) + 1
+                s.commit()
     request.session.clear()
     return {"ok": True}
 
@@ -205,6 +227,7 @@ async def google_callback(request: Request):
             u.google_sub = sub
         s.commit()
         request.session["uid"] = u.id
+        request.session["sv"] = u.session_version
 
     # The frontend checks /api/me.needsPassword on landing and shows the
     # set-password screen itself — nothing more to signal here.

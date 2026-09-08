@@ -52,6 +52,16 @@ class User(Base):
     # Never shared, never defaulted from anyone else's.
     profile = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), default=now)
+    # Session cookies here are signed and stateless (Starlette's
+    # SessionMiddleware, no server-side session store) — "logging out" only
+    # ever told the browser holding that cookie to forget it. Tested: replaying
+    # the exact pre-logout cookie value afterwards still authenticated,
+    # for up to the cookie's 30-day max_age, on an account someone believed
+    # they had signed out of. This counter is what actually revokes it —
+    # embedded in the session at login, checked on every request, bumped on
+    # logout so every outstanding cookie for this user (stolen or not, this
+    # device or another) stops working at once. See current_user() in app.py.
+    session_version = Column(Integer, default=0, nullable=False)
 
     statements = relationship("Statement", back_populates="user",
                               cascade="all, delete-orphan")
