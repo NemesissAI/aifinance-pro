@@ -497,61 +497,73 @@ async def index():
     if not INDEX_HTML.is_file():
         raise HTTPException(404)
     return FileResponse(INDEX_HTML)
-
-
 if (ROOT / "logos").is_dir():
     app.mount("/logos", StaticFiles(directory=str(ROOT / "logos")), name="logos")
+
+from pydantic import BaseModel
 
 class TelemetryData(BaseModel):
     time_spent: int
     features: list[str] = []
 
 @app.post("/api/telemetry")
-def api_telemetry(data: TelemetryData, req: Request, db: Session = Depends(get_db)):
-    u = current_user(req, db)
-    if not u:
-        return {}
-    import json
-    u.total_time_seconds += data.time_spent
-    try:
-        existing = u.features_used if isinstance(u.features_used, list) else json.loads(u.features_used)
-    except:
-        existing = []
-    if not isinstance(existing, list):
-        existing = []
-    new_feats = list(set(existing + data.features))
-    u.features_used = new_feats
-    db.commit()
-    return {"status": "ok"}
+async def api_telemetry(data: TelemetryData, user=Depends(current_user)):
+    with db.session() as s:
+        u = s.get(db.User, user["id"])
+        if not u:
+            return {}
+        import json
+        u.total_time_seconds += data.time_spent
+        try:
+            existing = u.features_used if isinstance(u.features_used, list) else json.loads(u.features_used)
+        except:
+            existing = []
+        if not isinstance(existing, list):
+            existing = []
+        new_feats = list(set(existing + data.features))
+        u.features_used = new_feats
+        s.commit()
+        return {"status": "ok"}
 
 @app.get("/api/admin/dashboard")
-def admin_dashboard(req: Request, db: Session = Depends(get_db)):
-    u = current_user(req, db)
-    if not u or not u.is_admin:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    from sqlalchemy import func
-    users = db.query(User).all()
-    results = []
-    import json
-    for user in users:
-        stmt_count = db.query(func.count(Statement.id)).filter_by(user_id=user.id).scalar()
-        try:
-            feats = user.features_used if isinstance(user.features_used, list) else json.loads(user.features_used)
-        except:
-            feats = []
-        if not isinstance(feats, list):
-            feats = []
-        results.append({
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "total_time_seconds": user.total_time_seconds,
-            "features_used": feats,
-            "statement_count": stmt_count,
-            "is_admin": bool(user.is_admin)
-        })
-    return results
+async def admin_dashboard(user=Depends(current_user)):
+    with db.session() as s:
+        u = s.get(db.User, user["id"])
+        if not u or not u.is_admin:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        from sqlalchemy import func
+        users = s.query(db.User).all()
+        results = []
+        import json
+        for u_obj in users:
+            stmt_count = s.query(func.count(db.Statement.id)).filter_by(user_id=u_obj.id).scalar()
+            try:
+                feats = u_obj.features_used if isinstance(u_obj.features_used, list) else json.loads(u_obj.features_used)
+            except:
+                feats = []
+            if not isinstance(feats, list):
+                feats = []
+            results.append({
+                "id": u_obj.id,
+                "email": u_obj.email,
+                "name": u_obj.name,
+                "total_time_seconds": u_obj.total_time_seconds,
+                "features_used": feats,
+                "statement_count": stmt_count,
+                "is_admin": bool(u_obj.is_admin)
+            })
+        return results
 
 @app.get("/admin")
-def serve_admin():
+async def serve_admin(user=Depends(current_user)):
+    # The data underneath (/api/admin/dashboard) was already gated on
+    # is_admin; this shell page itself was not, so an unauthenticated
+    # request could load it and see the empty dashboard chrome before its
+    # own fetch to that endpoint 403'd. No secrets live in the page, but
+    # there's no reason to hand out "an admin panel exists at /admin, here
+    # is its layout" to a signed-out visitor when gating it costs one line.
+    with db.session() as s:
+        u = s.get(db.User, user["id"])
+        if not u or not u.is_admin:
+            raise HTTPException(403, "Forbidden")
     return FileResponse("admin.html")
