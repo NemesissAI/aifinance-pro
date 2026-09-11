@@ -3,106 +3,107 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Creator Dashboard - AIFinance Pro</title>
+  <title>Creator Dashboard — AIFinance Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    .glass-card {
-      background: rgba(30, 41, 59, 0.4);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .card {
+      background: rgba(30, 41, 59, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.10);
     }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); border-radius: 4px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
-    /* Loaders */
+    th[data-sort] { cursor: pointer; user-select: none; }
+    th[data-sort]:hover { color: #cbd5e1; }
     .loader {
-      border: 3px solid rgba(255,255,255,0.1);
-      border-top: 3px solid #3b82f6;
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
+      border: 3px solid rgba(255,255,255,0.08);
+      border-top-color: #3b82f6;
+      border-radius: 50%; width: 24px; height: 24px;
       animation: spin 1s linear infinite;
     }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-200 antialiased min-h-screen p-6 custom-scrollbar">
+<body class="bg-slate-950 text-slate-200 antialiased min-h-screen p-4 sm:p-6">
 
-  <!-- Header -->
-  <header class="max-w-7xl mx-auto flex items-center justify-between mb-8">
+  <header class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 mb-6">
     <div class="flex items-center gap-4">
-      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-        <i class="fa-solid fa-crown text-white text-xl"></i>
+      <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+        <i class="fa-solid fa-crown text-white"></i>
       </div>
       <div>
-        <h1 class="text-2xl font-bold text-white tracking-tight">Creator Dashboard</h1>
-        <p class="text-xs text-slate-400 uppercase tracking-widest font-medium">Platform Analytics & Users</p>
+        <h1 class="text-xl font-bold text-white tracking-tight">Creator Dashboard</h1>
+        <p class="text-[11px] text-slate-500 uppercase tracking-widest font-semibold">Who is using the demo, and how</p>
       </div>
     </div>
-    <div class="flex items-center gap-4">
-      <button onclick="window.location.href='/'" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium transition-colors">
-        <i class="fa-solid fa-arrow-left mr-2"></i> Back to App
-      </button>
-      <button id="refresh-btn" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-lg shadow-blue-500/20 transition-colors flex items-center gap-2">
-        <i class="fa-solid fa-rotate-right"></i> Refresh
+    <div class="flex items-center gap-2">
+      <span id="updated" class="text-xs text-slate-500 mr-2"></span>
+      <a href="/" class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium transition-colors">
+        <i class="fa-solid fa-arrow-left mr-1.5"></i> App
+      </a>
+      <button id="refresh-btn" class="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-lg shadow-blue-500/20 transition-colors">
+        <i class="fa-solid fa-rotate-right mr-1.5"></i> Refresh
       </button>
     </div>
   </header>
 
-  <!-- Content -->
-  <main class="max-w-7xl mx-auto space-y-6">
-    
-    <!-- Top Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="glass-card rounded-2xl p-6">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Users</p>
-        <p class="text-3xl font-bold text-white" id="stat-users">-</p>
+  <main class="max-w-7xl mx-auto space-y-5">
+
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="card rounded-2xl p-5">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Accounts</p>
+        <p class="text-2xl font-bold text-white" id="stat-users">–</p>
       </div>
-      <div class="glass-card rounded-2xl p-6">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Statements</p>
-        <p class="text-3xl font-bold text-blue-400" id="stat-statements">-</p>
+      <div class="card rounded-2xl p-5">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Active (7d)</p>
+        <p class="text-2xl font-bold text-emerald-400" id="stat-active">–</p>
       </div>
-      <div class="glass-card rounded-2xl p-6">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Avg Time / User</p>
-        <p class="text-3xl font-bold text-emerald-400" id="stat-time">-</p>
+      <div class="card rounded-2xl p-5">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Finished setup</p>
+        <p class="text-2xl font-bold text-amber-400" id="stat-setup">–</p>
       </div>
-      <div class="glass-card rounded-2xl p-6">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total App Time</p>
-        <p class="text-3xl font-bold text-purple-400" id="stat-total-time">-</p>
+      <div class="card rounded-2xl p-5">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Statements</p>
+        <p class="text-2xl font-bold text-blue-400" id="stat-statements">–</p>
+      </div>
+      <div class="card rounded-2xl p-5">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Total active time</p>
+        <p class="text-2xl font-bold text-purple-400" id="stat-time">–</p>
       </div>
     </div>
 
-    <!-- Users Table -->
-    <div class="glass-card rounded-2xl overflow-hidden">
-      <div class="p-6 border-b border-slate-700/50 flex justify-between items-center">
-        <h2 class="text-lg font-bold text-white"><i class="fa-solid fa-users text-slate-400 mr-2"></i> User Details</h2>
+    <p class="text-xs text-slate-500 leading-relaxed">
+      <i class="fa-solid fa-circle-info mr-1"></i>
+      Time counts only while the tab was visible and someone was clicking or typing —
+      a page left open in the background does not accumulate. <span class="text-slate-400">Finished setup</span>
+      means the account has a holder name saved; without it every own-account transfer
+      is counted as income, so an account stuck before that step has not really started.
+    </p>
+
+    <div class="card rounded-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800/70 flex items-center justify-between gap-3">
+        <h2 class="text-sm font-bold text-white"><i class="fa-solid fa-users text-slate-500 mr-2"></i>Users</h2>
+        <input id="filter" type="search" placeholder="Filter by name or email…"
+               class="bg-slate-900/70 border border-slate-700/60 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/60 w-56"/>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm text-slate-400">
-          <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 border-b border-slate-700/50">
+        <table class="w-full text-left text-sm">
+          <thead class="text-[11px] text-slate-500 uppercase bg-slate-900/60 border-b border-slate-800/70">
             <tr>
-              <th scope="col" class="px-6 py-4 font-semibold">User</th>
-              <th scope="col" class="px-6 py-4 font-semibold">Statements</th>
-              <th scope="col" class="px-6 py-4 font-semibold">Time Spent</th>
-              <th scope="col" class="px-6 py-4 font-semibold">Features Used</th>
-              <th scope="col" class="px-6 py-4 font-semibold">Role</th>
+              <th class="px-5 py-3 font-semibold" data-sort="name">User</th>
+              <th class="px-5 py-3 font-semibold" data-sort="signedUpAt">Joined</th>
+              <th class="px-5 py-3 font-semibold" data-sort="lastSeenAt">Last seen</th>
+              <th class="px-5 py-3 font-semibold" data-sort="activeSeconds">Active time</th>
+              <th class="px-5 py-3 font-semibold" data-sort="sessionCount">Visits</th>
+              <th class="px-5 py-3 font-semibold" data-sort="statementCount">Statements</th>
+              <th class="px-5 py-3 font-semibold">Setup</th>
+              <th class="px-5 py-3 font-semibold">Features used</th>
             </tr>
           </thead>
-          <tbody id="users-tbody" class="divide-y divide-slate-800/60">
-            <tr>
-              <td colspan="5" class="px-6 py-12 text-center text-slate-500">
-                <div class="flex flex-col items-center justify-center">
-                  <div class="loader mb-4"></div>
-                  <p>Loading users...</p>
-                </div>
-              </td>
-            </tr>
+          <tbody id="tbody" class="divide-y divide-slate-800/60">
+            <tr><td colspan="8" class="px-5 py-14 text-center text-slate-500">
+              <div class="flex flex-col items-center gap-3"><div class="loader"></div><span>Loading…</span></div>
+            </td></tr>
           </tbody>
         </table>
       </div>
@@ -111,77 +112,157 @@
   </main>
 
   <script>
-    function formatTime(seconds) {
-      if (!seconds) return '0m';
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      if (h > 0) return `${h}h ${m}m`;
-      return `${m}m`;
+    // Every value below is written by whoever registered the account — a name
+    // is free text from a sign-up form. Interpolating it into innerHTML runs
+    // whatever they typed, in the one browser that is guaranteed to be the
+    // owner's. The previous version of this page did exactly that.
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+      c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    const DAY = 86400000;
+    let rows = [], sortKey = 'lastSeenAt', sortDir = -1;
+
+    function dur(seconds) {
+      const s = Math.max(0, Math.round(seconds || 0));
+      if (s < 60) return s + 's';
+      const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+      return h ? `${h}h ${m}m` : `${m}m`;
     }
 
-    async function loadDashboard() {
-      const tbody = document.getElementById('users-tbody');
+    function ago(iso) {
+      if (!iso) return null;
+      const t = Date.parse(iso);
+      if (isNaN(t)) return null;
+      const d = Date.now() - t;
+      if (d < 60000) return 'just now';
+      if (d < 3600000) return Math.floor(d / 60000) + ' min ago';
+      if (d < DAY) return Math.floor(d / 3600000) + 'h ago';
+      if (d < 30 * DAY) return Math.floor(d / DAY) + 'd ago';
+      return new Date(t).toLocaleDateString();
+    }
+
+    function day(iso) {
+      if (!iso) return '—';
+      const t = Date.parse(iso);
+      return isNaN(t) ? '—' : new Date(t).toLocaleDateString(undefined,
+        { day: '2-digit', month: 'short', year: '2-digit' });
+    }
+
+    function featureChips(features) {
+      const entries = Object.entries(features || {})
+        .filter(([, n]) => n > 0)
+        .sort((a, b) => b[1] - a[1]);
+      if (!entries.length) return '<span class="text-slate-600 text-xs italic">nothing yet</span>';
+      return entries.map(([name, n]) => `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
+                     bg-slate-800/80 text-slate-300 border border-slate-700/60 whitespace-nowrap">
+          ${esc(name)}<span class="text-slate-500 font-bold">${n}</span>
+        </span>`).join(' ');
+    }
+
+    function render() {
+      const q = document.getElementById('filter').value.trim().toLowerCase();
+      const shown = rows.filter(u =>
+        !q || (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+
+      shown.sort((a, b) => {
+        let x = a[sortKey], y = b[sortKey];
+        if (typeof x === 'string' || typeof y === 'string') {
+          // Dates arrive as ISO strings, which sort correctly as text; a null
+          // (never seen) must land at the bottom either way, not at the top.
+          x = x || ''; y = y || '';
+          return x < y ? -sortDir : x > y ? sortDir : 0;
+        }
+        return ((x || 0) - (y || 0)) * sortDir;
+      });
+
+      const tbody = document.getElementById('tbody');
+      if (!shown.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-14 text-center text-slate-500">
+          ${rows.length ? 'Nothing matches that filter.' : 'No accounts yet.'}</td></tr>`;
+      } else {
+        tbody.innerHTML = shown.map(u => {
+          const seen = ago(u.lastSeenAt);
+          const fresh = u.lastSeenAt && (Date.now() - Date.parse(u.lastSeenAt)) < 7 * DAY;
+          return `
+          <tr class="hover:bg-slate-800/30 transition-colors align-top">
+            <td class="px-5 py-3.5">
+              <div class="flex flex-col">
+                <span class="text-white font-medium flex items-center gap-2">
+                  ${esc(u.name || 'No name')}
+                  ${u.isAdmin ? '<i class="fa-solid fa-crown text-amber-500 text-[10px]" title="admin"></i>' : ''}
+                </span>
+                <span class="text-xs text-slate-500">${esc(u.email)}</span>
+              </div>
+            </td>
+            <td class="px-5 py-3.5 text-slate-400 text-xs whitespace-nowrap">${day(u.signedUpAt)}</td>
+            <td class="px-5 py-3.5 text-xs whitespace-nowrap ${fresh ? 'text-emerald-400' : 'text-slate-500'}">
+              ${seen ? esc(seen) : '<span class="italic text-slate-600">never opened</span>'}
+            </td>
+            <td class="px-5 py-3.5 font-semibold text-slate-200 whitespace-nowrap">${dur(u.activeSeconds)}</td>
+            <td class="px-5 py-3.5 text-slate-400">${u.sessionCount || 0}</td>
+            <td class="px-5 py-3.5">
+              <span class="px-2 py-0.5 rounded-full text-xs font-bold
+                ${u.statementCount ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-600'}">
+                ${u.statementCount || 0}
+              </span>
+              ${u.lastUploadAt ? `<div class="text-[10px] text-slate-600 mt-1">last ${esc(day(u.lastUploadAt))}</div>` : ''}
+            </td>
+            <td class="px-5 py-3.5">
+              ${u.hasProfile
+                ? '<span class="text-emerald-400 text-xs"><i class="fa-solid fa-check mr-1"></i>done</span>'
+                : '<span class="text-amber-500/80 text-xs"><i class="fa-solid fa-hourglass-half mr-1"></i>no name yet</span>'}
+            </td>
+            <td class="px-5 py-3.5"><div class="flex flex-wrap gap-1 max-w-sm">${featureChips(u.features)}</div></td>
+          </tr>`;
+        }).join('');
+      }
+
+      const totalTime = rows.reduce((a, u) => a + (u.activeSeconds || 0), 0);
+      const active7 = rows.filter(u => u.lastSeenAt && (Date.now() - Date.parse(u.lastSeenAt)) < 7 * DAY).length;
+      document.getElementById('stat-users').textContent = rows.length;
+      document.getElementById('stat-active').textContent = active7;
+      document.getElementById('stat-setup').textContent =
+        rows.filter(u => u.hasProfile).length + ' / ' + rows.length;
+      document.getElementById('stat-statements').textContent =
+        rows.reduce((a, u) => a + (u.statementCount || 0), 0);
+      document.getElementById('stat-time').textContent = dur(totalTime);
+    }
+
+    async function load() {
+      const tbody = document.getElementById('tbody');
       try {
         const res = await fetch('/api/admin/dashboard');
         if (res.status === 401 || res.status === 403) {
-          tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-red-400"><i class="fa-solid fa-lock text-3xl mb-3 block"></i> Access Denied. You must be an admin.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-14 text-center text-red-400">
+            <i class="fa-solid fa-lock text-2xl mb-3 block"></i>
+            This account is not on the admin list.
+            <div class="text-slate-500 text-xs mt-2">Set AIFP_ADMIN_EMAILS on the server and sign in again.</div>
+          </td></tr>`;
           return;
         }
-        if (!res.ok) throw new Error('Failed to load');
-        const users = await res.json();
-        
-        let totalTime = 0;
-        let totalStatements = 0;
-
-        tbody.innerHTML = users.length ? '' : `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-500">No users found.</td></tr>`;
-        
-        users.forEach(u => {
-          totalTime += (u.total_time_seconds || 0);
-          totalStatements += (u.statement_count || 0);
-
-          const featuresHtml = (u.features_used || []).map(f => 
-            `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">${f}</span>`
-          ).join(' ');
-
-          const isAdminBadge = u.is_admin ? `<span class="px-2 py-1 bg-purple-500/20 text-purple-400 text-[10px] font-bold rounded uppercase">Admin</span>` : `<span class="px-2 py-1 bg-slate-800 text-slate-500 text-[10px] font-bold rounded uppercase">User</span>`;
-
-          const row = `
-            <tr class="hover:bg-slate-800/30 transition-colors">
-              <td class="px-6 py-4">
-                <div class="flex flex-col">
-                  <span class="text-white font-medium">${u.name || 'Anonymous'}</span>
-                  <span class="text-xs">${u.email}</span>
-                </div>
-              </td>
-              <td class="px-6 py-4">
-                <span class="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 font-bold text-xs">${u.statement_count || 0}</span>
-              </td>
-              <td class="px-6 py-4 font-medium text-emerald-400">
-                ${formatTime(u.total_time_seconds)}
-              </td>
-              <td class="px-6 py-4 flex flex-wrap gap-1">
-                ${featuresHtml || '<span class="text-slate-600 text-xs italic">None</span>'}
-              </td>
-              <td class="px-6 py-4">
-                ${isAdminBadge}
-              </td>
-            </tr>
-          `;
-          tbody.innerHTML += row;
-        });
-
-        document.getElementById('stat-users').textContent = users.length;
-        document.getElementById('stat-statements').textContent = totalStatements;
-        document.getElementById('stat-total-time').textContent = formatTime(totalTime);
-        document.getElementById('stat-time').textContent = users.length ? formatTime(totalTime / users.length) : '0m';
-
+        if (!res.ok) throw new Error(res.status);
+        rows = await res.json();
+        document.getElementById('updated').textContent =
+          'updated ' + new Date().toLocaleTimeString();
+        render();
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-red-400">Error loading dashboard data.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-14 text-center text-red-400">
+          Could not load the dashboard.</td></tr>`;
       }
     }
 
-    document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
-    loadDashboard();
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        sortDir = (key === sortKey) ? -sortDir : -1;
+        sortKey = key;
+        render();
+      });
+    });
+    document.getElementById('filter').addEventListener('input', render);
+    document.getElementById('refresh-btn').addEventListener('click', load);
+    load();
   </script>
 </body>
 </html>

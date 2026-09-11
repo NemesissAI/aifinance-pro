@@ -638,6 +638,44 @@ statement.
 and mail ledger, is refused with a 403; the state file has its own API. Check
 this again if the server ever grows another way to read a path.
 
+## The creator dashboard (`/admin`)
+
+Who has an account, how long they actually used it, how many statements they
+uploaded and which features they touched — one row per person, for watching a
+demo that friends are testing.
+
+**`AIFP_ADMIN_EMAILS` is the only thing that grants it.** A comma-separated
+list, read from the environment on every request. There *is* an `is_admin`
+column and it is deliberately not consulted: three leftover test accounts were
+found sitting at `is_admin = 1` from a session where the flag was flipped by
+hand, and a column granted once stays granted — those accounts would have kept
+the dashboard forever with nothing in the app ever saying so. A column also
+disappears with the database on a fresh deploy, which 403s the owner out of
+their own dashboard. The environment survives both.
+
+```powershell
+$env:AIFP_ADMIN_EMAILS = "you@example.com"
+.venv\Scripts\python.exe -m uvicorn server.app:app --port 8000
+```
+
+**Time is active time, not tab-open time.** The clock only runs while the tab
+is visible *and* something was clicked or typed in the last 60 seconds. The
+first version measured wall-clock since page load, which turns a tab forgotten
+overnight into "8h of usage" — and that number is the entire reason the page
+exists. Batches go every 30s and on `pagehide`/`visibilitychange`, which fire
+where `beforeunload` increasingly does not.
+
+**The feature list is an allowlist, server-side** (`KNOWN_FEATURES`). It
+arrives from the browser, so without one the column is whatever a client cares
+to invent and a single crafted request fills the dashboard with strings
+somebody else chose. `active_seconds` is capped at an hour for the same
+reason — nothing else bounds a number the page supplies.
+
+**Everything on that page is user-written text.** A display name comes from a
+sign-up form; the first version interpolated it straight into `innerHTML`, so
+whoever registered could run script in the one browser guaranteed to belong to
+the owner. Escape every cell.
+
 ## Not built
 
 - **Scheduled/automatic mail polling.** The button is manual on purpose. A

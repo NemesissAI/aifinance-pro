@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sys
+from datetime import timezone
 from pathlib import Path
 
 from argon2 import PasswordHasher
@@ -80,6 +81,34 @@ def _google_configured() -> bool:
     return bool(os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"))
 
 
+# Who may open the creator dashboard. Set AIFP_ADMIN_EMAILS to a
+# comma-separated list; anyone else signing in is a plain user.
+#
+# It has to be configuration rather than a flag someone sets once by hand,
+# because the flag lives in the database and the database is recreated on
+# every fresh deploy — an admin granted by hand disappears with it, and the
+# dashboard then 403s its own owner with no way back in that does not involve
+# a SQL client. Reading it from the environment means the answer is restored
+# by the same deploy that wipes it.
+ADMIN_EMAILS = {e.strip().lower()
+                for e in os.environ.get("AIFP_ADMIN_EMAILS", "").split(",")
+                if e.strip()}
+
+
+def _is_admin(email: str | None) -> bool:
+    """The environment is the only thing that grants this — never a database row.
+
+    There is an is_admin column, and it is deliberately not consulted here.
+    Three leftover test accounts were sitting in it set to 1, from a session
+    where somebody flipped the flag by hand to try the page out; a column is
+    granted once and stays granted, so those accounts would have kept the
+    creator dashboard forever and nothing in the app would ever have said so.
+    Reading the list every time means revoking an address is a config change,
+    and a stale row cannot grant anything.
+    """
+    return bool(email) and email.strip().lower() in ADMIN_EMAILS
+
+
 def current_user(request: Request):
     uid = request.session.get("uid")
     if not uid:
@@ -100,6 +129,10 @@ def current_user(request: Request):
             raise HTTPException(401, "Sign in first.")
         return {"id": u.id, "email": u.email, "name": u.name,
                 "profile": dict(u.profile or {}),
+                # So the page can show the creator dashboard link to the one
+                # account that can actually open it, instead of everyone
+                # discovering a door that 403s.
+                "isAdmin": _is_admin(u.email),
                 # A Google-only account has no password yet. The product
                 # requires one — see the sign-in route below for why — so the
                 # frontend gates everything but the set-password screen on this.
@@ -146,7 +179,7 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
             raise HTTPException(401, "Email or password is wrong.")
         if hasher.check_needs_rehash(u.password_hash):
             u.password_hash = hasher.hash(passwords.normalize(password))
-            s.commit()
+        s.commit()
         request.session["uid"] = u.id
         request.session["sv"] = u.session_version
         return {"ok": True, "email": u.email, "name": u.name}
@@ -500,59 +533,119 @@ async def index():
 if (ROOT / "logos").is_dir():
     app.mount("/logos", StaticFiles(directory=str(ROOT / "logos")), name="logos")
 
-from pydantic import BaseModel
+# ── telemetry, and the creator dashboard it feeds ───────────────────────────
+
+from pydantic import BaseModel, Field
+
 
 class TelemetryData(BaseModel):
-    time_spent: int
-    features: list[str] = []
+    # Capped, because this arrives from the browser and nothing else bounds
+    # it. A bug in the page — or anyone with the dev tools open — could
+    # otherwise post a decade of "usage" in one request and the dashboard
+    # would report it with a straight face. One hour is well above the 30s
+    # the page actually sends.
+    active_seconds: int = Field(0, ge=0, le=3600)
+    features: dict[str, int] = Field(default_factory=dict)
+    new_session: bool = False
+
+
+# Names the page is allowed to report. Without this the feature column is
+# whatever a client cares to invent, and one crafted request turns the
+# dashboard into a list of strings someone else chose.
+KNOWN_FEATURES = {
+    "Dashboard", "Transactions", "Analytics", "AI Coach", "Settings",
+    "Upload", "Categorise", "Match transfers", "Budgets", "Subscriptions",
+    "What-If Simulator", "Export", "Unknown queue", "Filters", "Search",
+}
+
+
+def _feature_counts(raw) -> dict[str, int]:
+    """features_used as {name: count}, whatever shape it is on disk.
+
+    It shipped as a list of names first, so accounts created before this exist
+    with one. Those are read as "seen once" rather than dropped.
+    """
+    if isinstance(raw, list):
+        return {str(k): 1 for k in raw}
+    if isinstance(raw, dict):
+        out = {}
+        for k, v in raw.items():
+            try:
+                out[str(k)] = int(v)
+            except (TypeError, ValueError):
+                out[str(k)] = 1
+        return out
+    return {}
+
 
 @app.post("/api/telemetry")
 async def api_telemetry(data: TelemetryData, user=Depends(current_user)):
     with db.session() as s:
         u = s.get(db.User, user["id"])
         if not u:
-            return {}
-        import json
-        u.total_time_seconds += data.time_spent
-        try:
-            existing = u.features_used if isinstance(u.features_used, list) else json.loads(u.features_used)
-        except:
-            existing = []
-        if not isinstance(existing, list):
-            existing = []
-        new_feats = list(set(existing + data.features))
-        u.features_used = new_feats
+            return {"ok": False}
+        u.total_time_seconds = (u.total_time_seconds or 0) + data.active_seconds
+        counts = _feature_counts(u.features_used)
+        for name, n in data.features.items():
+            if name in KNOWN_FEATURES:
+                counts[name] = counts.get(name, 0) + max(0, min(int(n), 1000))
+        u.features_used = counts
+        u.last_seen_at = db.now()
+        if data.new_session:
+            u.session_count = (u.session_count or 0) + 1
         s.commit()
-        return {"status": "ok"}
+        return {"ok": True}
+
 
 @app.get("/api/admin/dashboard")
 async def admin_dashboard(user=Depends(current_user)):
     with db.session() as s:
-        u = s.get(db.User, user["id"])
-        if not u or not u.is_admin:
-            raise HTTPException(status_code=403, detail="Forbidden")
+        me_row = s.get(db.User, user["id"])
+        if not me_row or not _is_admin(me_row.email):
+            raise HTTPException(403, "Forbidden")
+
         from sqlalchemy import func
-        users = s.query(db.User).all()
-        results = []
-        import json
-        for u_obj in users:
-            stmt_count = s.query(func.count(db.Statement.id)).filter_by(user_id=u_obj.id).scalar()
-            try:
-                feats = u_obj.features_used if isinstance(u_obj.features_used, list) else json.loads(u_obj.features_used)
-            except:
-                feats = []
-            if not isinstance(feats, list):
-                feats = []
-            results.append({
-                "id": u_obj.id,
-                "email": u_obj.email,
-                "name": u_obj.name,
-                "total_time_seconds": u_obj.total_time_seconds,
-                "features_used": feats,
-                "statement_count": stmt_count,
-                "is_admin": bool(u_obj.is_admin)
-            })
-        return results
+        # One grouped query rather than a count per user — the N+1 is
+        # harmless at this size but the page refreshes on a button.
+        counts = dict(s.query(db.Statement.user_id,
+                              func.count(db.Statement.id))
+                       .group_by(db.Statement.user_id).all())
+        latest = dict(s.query(db.Statement.user_id,
+                              func.max(db.Statement.created_at))
+                       .group_by(db.Statement.user_id).all())
+
+        def iso(v):
+            # SQLite drops the tzinfo a DateTime(timezone=True) column was
+            # given, so these come back naive even though db.now() stored UTC.
+            # isoformat() then emits no offset, and Date.parse() in the browser
+            # reads a bare timestamp as *local* time — an account created
+            # seconds ago rendered as "3h ago" here, off by exactly this
+            # machine's offset. Stamping the UTC these values actually are is
+            # what makes "last seen" mean anything.
+            if v is None:
+                return None
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            return v.isoformat()
+
+        return [{
+            "id": u.id,
+            "email": u.email,
+            "name": u.name or "",
+            "signedUpAt": iso(u.created_at),
+            "lastSeenAt": iso(u.last_seen_at),
+            "activeSeconds": u.total_time_seconds or 0,
+            "sessionCount": u.session_count or 0,
+            "statementCount": counts.get(u.id, 0),
+            "lastUploadAt": iso(latest.get(u.id)),
+            "features": _feature_counts(u.features_used),
+            # Whether they ever got past the one step that cannot be skipped:
+            # an account with no holder name parses every own transfer as
+            # someone else's money, so "signed up but never finished setup"
+            # is the single most useful thing to see in this table.
+            "hasProfile": bool((u.profile or {}).get("account_holder_keys")),
+            "isAdmin": _is_admin(u.email),
+        } for u in s.query(db.User).order_by(db.User.created_at.desc()).all()]
 
 @app.get("/admin")
 async def serve_admin(user=Depends(current_user)):
@@ -564,6 +657,9 @@ async def serve_admin(user=Depends(current_user)):
     # is its layout" to a signed-out visitor when gating it costs one line.
     with db.session() as s:
         u = s.get(db.User, user["id"])
-        if not u or not u.is_admin:
+        if not u or not _is_admin(u.email):
             raise HTTPException(403, "Forbidden")
-    return FileResponse("admin.html")
+    # Not the bare filename: that resolves against the working directory the
+    # server happened to be started from, which is the project root here and
+    # something else entirely under a process manager.
+    return FileResponse(ROOT / "admin.html")

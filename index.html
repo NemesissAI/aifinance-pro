@@ -645,6 +645,14 @@
           </span>
           <span class="font-medium text-sm">Settings</span>
         </a>
+        <!-- Revealed by the telemetry block only when /api/me says isAdmin.
+             Hidden rather than absent so it needs no markup injection. -->
+        <a href="/admin" data-admin-only class="hidden flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-default group">
+          <span class="w-9 h-9 rounded-lg bg-slate-800/50 flex items-center justify-center group-hover:bg-slate-700/50 transition-default">
+            <i class="fa-solid fa-crown text-amber-500/70 group-hover:text-amber-400 text-sm transition-default"></i>
+          </span>
+          <span class="font-medium text-sm">Creator</span>
+        </a>
       </nav>
 
       <!-- Bottom Widget: Top Counterparties -->
@@ -8374,70 +8382,125 @@
     </div>
   </div>
 
-  <!-- Telemetry System -->
+  <!-- Usage telemetry — feeds the creator dashboard at /admin.
+       Only ever runs against the hosted server: the single-user local build
+       has no account to attribute anything to, and /api/telemetry does not
+       exist there. The previous version gated on a window.__serverMode flag
+       nothing ever set, so it returned on its first line and collected
+       nothing at all — the gate here is the server answering /api/me. -->
   <script>
     (function() {
-      if (!window.__serverMode) return; // Only track in server mode
+      const TICK_MS      = 30000;  // how often a batch is sent
+      const IDLE_MS      = 60000;  // no input for this long stops the clock
+      const MAX_BATCH_S  = 3600;   // the server rejects more; never send it
 
-      let sessionStartTime = Date.now();
-      let usedFeatures = new Set();
-      
-      // Hook into clicks to track features
-      document.addEventListener('click', (e) => {
-        const target = e.target.closest('[id]');
-        if (!target) return;
-        const id = target.id;
-        
-        if (id === 'nav-ai-coach') usedFeatures.add('AI Coach');
-        if (id === 'nav-analytics') usedFeatures.add('Analytics');
-        if (id === 'open-simulator-btn') usedFeatures.add('What-If Simulator');
-        if (id === 'print-export-btn') usedFeatures.add('Print Export');
-        if (id === 'upload-pdf-btn') usedFeatures.add('PDF Upload');
-      });
+      // Only these names are accepted server-side, so the two lists have to
+      // agree. Keys are element ids that actually exist on the page — the
+      // previous version watched two ("print-export-btn", "upload-pdf-btn")
+      // that were never in the markup, so those features could not be
+      // recorded however much they were used.
+      const BY_ID = {
+        'nav-dashboard':    'Dashboard',
+        'nav-transactions': 'Transactions',
+        'nav-analytics':    'Analytics',
+        'nav-ai-coach':     'AI Coach',
+        'nav-settings':     'Settings',
+        'drop-zone':        'Upload',
+        'pdf-input':        'Upload',
+        'open-simulator-btn': 'What-If Simulator',
+        'export-report-btn':  'Export',
+        'export-csv':         'Export',
+        'unknown-toggle':   'Unknown queue',
+        'bulk-apply':       'Categorise',
+        'bulk-link':        'Match transfers',
+        'budget-apply-all': 'Budgets',
+        'sub-add':          'Subscriptions',
+        'global-search':    'Search',
+      };
 
-      async function sendTelemetry() {
+      let armed        = false;   // the server confirmed this is a hosted session
+      let pending      = {};      // feature -> count, not yet sent
+      let activeMs     = 0;       // time actually spent using the page
+      let lastTick     = Date.now();
+      let lastInput    = Date.now();
+      let newSession   = true;    // reported once, so sessions can be counted
+
+      // Time is counted only while the tab is visible AND something has been
+      // typed or clicked in the last minute. Wall-clock since page load — what
+      // this used to send — turns a tab forgotten overnight into "8h of usage",
+      // and the whole point of the number is to know who actually engaged.
+      function accrue() {
         const now = Date.now();
-        const spentSeconds = Math.floor((now - sessionStartTime) / 1000);
-        if (spentSeconds < 5) return; // don't send if too short
-        
-        try {
-          const res = await fetch('/api/telemetry', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              time_spent: spentSeconds,
-              features: Array.from(usedFeatures)
-            })
-          });
-          if (res.ok) {
-            // Reset timer after successful send
-            sessionStartTime = Date.now();
-            usedFeatures.clear();
-          }
-        } catch (err) {
-          // Ignore errors, will retry on next tick
+        const gap = now - lastTick;
+        lastTick = now;
+        if (document.visibilityState === 'visible' && now - lastInput < IDLE_MS) {
+          activeMs += Math.min(gap, TICK_MS * 2);
         }
       }
 
-      // Send telemetry every 30 seconds
-      setInterval(sendTelemetry, 30000);
-      
-      // Try to send one last time on page unload
-      window.addEventListener('beforeunload', () => {
-        const spentSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-        if (spentSeconds >= 5) {
-          // Use keepalive for reliable beacon
-          fetch('/api/telemetry', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              time_spent: spentSeconds,
-              features: Array.from(usedFeatures)
-            }),
-            keepalive: true
-          }).catch(e => {});
+      ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev =>
+        document.addEventListener(ev, () => { lastInput = Date.now(); },
+                                  { passive: true, capture: true }));
+
+      document.addEventListener('click', e => {
+        const el = e.target.closest('[id]');
+        if (!el) return;
+        const name = BY_ID[el.id];
+        if (name) pending[name] = (pending[name] || 0) + 1;
+      }, true);
+
+      // Focus, not click: the search box is typed into, and a click that
+      // lands on it is not what "used search" means.
+      document.addEventListener('focusin', e => {
+        if (e.target && e.target.id === 'global-search') {
+          pending['Search'] = (pending['Search'] || 0) + 1;
         }
       });
+
+      function send(useKeepalive) {
+        accrue();
+        const seconds = Math.floor(activeMs / 1000);
+        const feats = pending;
+        if (!seconds && !Object.keys(feats).length && !newSession) return;
+        activeMs -= seconds * 1000;   // keep the sub-second remainder
+        pending = {};
+        const body = JSON.stringify({
+          active_seconds: Math.min(seconds, MAX_BATCH_S),
+          features: feats,
+          new_session: newSession,
+        });
+        newSession = false;
+        fetch('/api/telemetry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          keepalive: !!useKeepalive,
+        }).catch(() => {
+          // Offline or signed out. Put the counts back so the next tick
+          // carries them rather than dropping them on the floor.
+          Object.entries(feats).forEach(([k, v]) => pending[k] = (pending[k] || 0) + v);
+          activeMs += seconds * 1000;
+        });
+      }
+
+      fetch('/api/me').then(r => {
+        if (!r.ok) return;           // local single-user build, or signed out
+        armed = true;
+        lastTick = Date.now();
+        setInterval(() => { accrue(); if (armed) send(false); }, TICK_MS);
+        // visibilitychange fires on a phone being locked and on a tab being
+        // closed, which beforeunload increasingly does not.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') send(true);
+        });
+        window.addEventListener('pagehide', () => send(true));
+        return r.json();
+      }).then(me => {
+        // The dashboard link only appears for the account that can open it.
+        if (me && me.isAdmin) {
+          document.querySelectorAll('[data-admin-only]').forEach(el => el.classList.remove('hidden'));
+        }
+      }).catch(() => {});
     })();
   </script>
 </body>

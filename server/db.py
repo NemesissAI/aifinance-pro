@@ -51,8 +51,18 @@ class User(Base):
 
     # Telemetry and Admin
     is_admin = Column(Integer, default=0, nullable=False)
+    # Time the tab was *in use*, not time it was open. A dashboard left open
+    # in a background tab overnight reported eight hours of "usage", which is
+    # the one number this table exists to answer honestly. See the telemetry
+    # block in index.html for what counts as active.
     total_time_seconds = Column(Integer, default=0, nullable=False)
-    features_used = Column(JSON, default=list)
+    # {"AI Coach": 12, "Upload": 3} — a count, not a set. A bare list of names
+    # answers "did they ever open it" and nothing else; "opened the coach once
+    # and never came back" and "lives in the coach" are the same row, and the
+    # difference is the whole point of watching a demo.
+    features_used = Column(JSON, default=dict)
+    session_count = Column(Integer, default=0, nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
     # The user's own rules — who they are, who pays them, whose money they hold.
     # Never shared, never defaulted from anyone else's.
     profile = Column(JSON, default=dict)
@@ -104,8 +114,40 @@ class UserState(Base):
     updated_at = Column(DateTime(timezone=True), default=now, onupdate=now)
 
 
+# Columns added to a model after the database already existed. create_all()
+# only ever creates missing *tables* — it will not alter one that is already
+# there, so a new column is silently absent at runtime and every query naming
+# it fails with "no such column" on exactly the deployments that have real
+# users in them. Each entry is DDL that both SQLite and Postgres accept.
+_LATE_COLUMNS = {
+    "users": {
+        "session_version": "INTEGER NOT NULL DEFAULT 0",
+        "is_admin": "INTEGER NOT NULL DEFAULT 0",
+        "total_time_seconds": "INTEGER NOT NULL DEFAULT 0",
+        "features_used": "JSON",
+        "session_count": "INTEGER NOT NULL DEFAULT 0",
+        "last_seen_at": "TIMESTAMP",
+    },
+}
+
+
+def _add_late_columns() -> None:
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    for table, columns in _LATE_COLUMNS.items():
+        if table not in tables:
+            continue                      # create_all() just made it, in full
+        have = {c["name"] for c in insp.get_columns(table)}
+        for name, ddl in columns.items():
+            if name not in have:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
 def init() -> None:
     Base.metadata.create_all(engine)
+    _add_late_columns()
 
 
 def session() -> Session:
