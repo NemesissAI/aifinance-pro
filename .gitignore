@@ -20,3 +20,7 @@ design-samples.html
 # Antigravity's own multi-agent scratch space (BRIEFING.md, DISPATCH.md,
 # progress.md, etc.) — internal coordination, not project state.
 .agents/
+
+# Server log from a detached uvicorn start — runtime output, not source.
+.server.log
+.server.log.err
