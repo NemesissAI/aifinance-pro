@@ -835,8 +835,14 @@
               </button>
 
               <div id="onboarding-name-preview" class="hidden p-4 rounded-xl bg-blue-900/20 border border-blue-500/30 text-sm text-blue-200">
-                <p><span id="onboarding-name-matches" class="font-bold text-blue-400">0</span> transfers on your statements are already recognised as your own; this name will also catch the ones your banks print differently.</p>
+                <p><span id="onboarding-name-matches" class="font-bold text-blue-400">0</span> transfers on your statements are already recognised as your own; this name will also catch the ones your banks print differently.<span id="onboarding-name-extra"></span></p>
               </div>
+
+              <!-- Every failure here used to be silent: a rejected name, an
+                   expired session and a server that was not running all left
+                   the button resetting itself to "Check Name" with nothing on
+                   screen, which reads as a dead button rather than an answer. -->
+              <div id="onboarding-name-error" class="hidden p-4 rounded-xl bg-amber-900/20 border border-amber-500/30 text-sm text-amber-200"></div>
             </div>
 
             <div class="flex justify-end pt-4">
@@ -903,6 +909,8 @@
               </div>
             </div>
             
+            <div id="onboarding-cycle-error" class="hidden p-4 rounded-xl bg-amber-900/20 border border-amber-500/30 text-sm text-amber-200"></div>
+
             <div class="flex justify-between items-center pt-4">
               <button id="onboarding-back-3" class="px-5 py-2.5 text-slate-400 hover:text-white transition-default text-sm">Back</button>
               <button id="onboarding-next-3" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition-default">Finish Setup & Start Tour</button>
@@ -7625,26 +7633,80 @@
     }
 
     // Step 1: Name validation
-    btnCheckName.addEventListener('click', async () => {
+    const nameError = document.getElementById('onboarding-name-error');
+
+    function showNameError(msg) {
+      nameError.textContent = msg;
+      nameError.classList.remove('hidden');
+      namePreview.classList.add('hidden');
+      next1.classList.add('hidden');
+    }
+
+    async function checkName() {
       const name = inputName.value.trim();
-      if (!name) return;
-      btnCheckName.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...';
-      
+      nameError.classList.add('hidden');
+      if (!name) {
+        // Was a bare `return`, so an empty box made the button look broken
+        // in exactly the same way a real failure did.
+        showNameError('Type the name your bank prints on your statements first.');
+        inputName.focus();
+        return;
+      }
+
+      btnCheckName.disabled = true;
+      btnCheckName.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+
+      let res;
       try {
-        const res = await fetch('/api/onboarding/name', {
+        res = await fetch('/api/onboarding/name', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
         });
-        if (res.ok) {
-          const data = await res.json();
-          // The API contract returns 'alreadyRecognised' and 'wouldChange' or 'matches'
-          nameMatches.innerText = data.alreadyRecognised || data.matches || "0";
-          namePreview.classList.remove('hidden');
-          next1.classList.remove('hidden');
+      } catch (e) {
+        // fetch only rejects when the request never got an answer at all.
+        showNameError('Could not reach the server. Check that it is still running, then try again.');
+        return;
+      } finally {
+        btnCheckName.disabled = false;
+        btnCheckName.innerText = 'Check Name';
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        // alreadyRecognised and wouldChange answer two different worries and
+        // are both worth saying — see preview_name() in server/onboarding.py.
+        const already = data.alreadyRecognised || 0;
+        const changing = data.wouldChange || 0;
+        nameMatches.innerText = already;
+        const extra = document.getElementById('onboarding-name-extra');
+        if (extra) {
+          extra.textContent = changing
+            ? ` ${changing} more will now be recognised as yours instead of someone else's.`
+            : '';
         }
-      } catch(e) { console.error(e); }
-      finally { btnCheckName.innerText = 'Check Name'; }
+        namePreview.classList.remove('hidden');
+        next1.classList.remove('hidden');
+        return;
+      }
+
+      // Every one of these used to fall through to nothing at all.
+      if (res.status === 401) {
+        showNameError('Your session has expired. Sign in again and come back to this step.');
+      } else if (res.status === 404) {
+        showNameError('This build has no account server behind it, so the name cannot be saved here. '
+                    + 'Open the app from the multi-user server instead.');
+      } else {
+        let detail = '';
+        try { detail = (await res.json()).detail || ''; } catch (e) {}
+        showNameError(detail || `The server refused that name (error ${res.status}).`);
+      }
+    }
+
+    btnCheckName.addEventListener('click', checkName);
+    // A name field where Enter does nothing is its own dead end.
+    inputName.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); checkName(); }
     });
 
     next1.addEventListener('click', () => showStep(2));
@@ -7716,15 +7778,36 @@
       let day = parseInt(document.getElementById('onboarding-cycle-input').value);
       if (isNaN(day) || day < 1 || day > 28) day = 1;
       
-      next3.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+      const label = next3.innerHTML;
+      next3.disabled = true;
+      next3.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+      // This used to swallow the failure and finish onboarding anyway, so a
+      // save that never happened was announced as setup being complete — and
+      // the cycle day is the setting every figure in the app hangs off.
+      let saved = false;
       try {
-        await fetch('/api/onboarding/cycle-day', {
+        const res = await fetch('/api/onboarding/cycle-day', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ day })
         });
-      } catch(e) {}
-      
+        saved = res.ok;
+      } catch (e) {}
+
+      next3.disabled = false;
+      next3.innerHTML = label;
+
+      if (!saved) {
+        const err = document.getElementById('onboarding-cycle-error');
+        if (err) {
+          err.textContent = 'Could not save that day — the server did not accept it. '
+                          + 'Check that it is running and try again.';
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
       endOnboarding();
       await showTour();
     });
