@@ -536,3 +536,42 @@ honestly. It still beats silence.
   `features_used` sütunları zaten `db.py`'de vardı, migration'a dokunmadım.
 
   38/38 yerel test geçiyor, commit ediyorum.
+
+- **2026-09-11 · Claude (Opus 5):** Creator Dashboard'u baştan aşağı taradım —
+  hiçbir şey silinmemişti, ama sistemin tamamı ölüydü. Dört şeyin aynı anda
+  doğru olması gerekiyordu, hiçbiri değildi:
+
+  1. `is_admin` kod tabanında hiçbir yerde 1 yapılmıyordu. `/admin` ve
+     `/api/admin/dashboard` herkese, sahibine dahil, 403 veriyordu. Artık
+     `AIFP_ADMIN_EMAILS` ortam değişkeni — her istekte okunuyor. Sütunu
+     bilerek okumuyorum: DB'de elle 1 yapılmış üç eski test hesabı buldum
+     (`sectest`, `telemtest`, `deneyim`), sütunla verilen yetki geri alınmıyor
+     ve uygulamada bunu söyleyen hiçbir yer yok. Ayrıca sütun yeni deploy'da
+     DB ile birlikte siliniyor, sahibi kendi panelinden kilitleniyor.
+  2. Telemetri bloğu `window.__serverMode` kontrolüyle başlıyordu — bu
+     değişken kod tabanında **hiçbir yerde atanmıyor**. İlk satırda `return`
+     ediyordu, tek bir veri bile toplanmamıştı. Artık `/api/me` ile soruyor.
+  3. İzlenen beş id'nin ikisi (`print-export-btn`, `upload-pdf-btn`) sayfada
+     yoktu — o özellikler ne kadar kullanılırsa kullanılsın kaydedilemezdi.
+  4. Süre = sayfa açıldığından beri geçen duvar saati. Gece açık unutulan
+     sekme "8 saat kullanım" oluyordu — oysa sayfanın tek varlık sebebi bu
+     sayı. Artık sadece sekme görünürken VE son 60 sn içinde tıklama/yazma
+     varken sayıyor.
+
+  Canlı test ederken üç şey daha çıktı: `admin.html` kullanıcı adını
+  escape etmeden `innerHTML`'e basıyordu (kayıt formuna script yazan biri
+  sahibin tarayıcısında kod çalıştırabilirdi); zaman damgaları tzinfo'suz
+  gidiyordu, `Date.parse` bunu yerel saat sanıp yeni açılan hesabı "3 saat
+  önce" gösteriyordu; `active_seconds` ve özellik adları tarayıcıdan geliyor
+  ve hiçbir şey sınırlamıyordu — artık sunucuda cap + allowlist var.
+
+  **Dikkat:** `features_used` artık liste değil `{ad: sayı}` sözlüğü. Eski
+  liste formatındaki satırlar "bir kez görüldü" olarak okunuyor, veri
+  kaybı yok. Bu alana dokunacaksan `_feature_counts()` üzerinden geç.
+
+  Doğrulama: admin olmayan iki route'ta da 403, bayat `is_admin` satırı
+  hiçbir şey vermiyor, aşırı büyük batch 422, uydurma özellik adı düşüyor,
+  ve gerçek tarayıcı oturumu 30 sn aktif süre + 2 ziyaret + tıkladığım iki
+  özelliği doğru kaydetti. 114/114 test geçiyor. Commit: `4ded4a3`.
+
+  Kurulum: `AIFP_ADMIN_EMAILS=<sahibin e-postası>` — CLAUDE.md'de yazdım.
