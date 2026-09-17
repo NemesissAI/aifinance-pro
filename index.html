@@ -853,12 +853,20 @@
                     <p id="dropdown-user-name" class="text-xs font-semibold text-white truncate">Talha Açık</p>
                     <p id="dropdown-user-email" class="text-[11px] text-slate-500 truncate">user@example.com</p>
                   </div>
+                  <button id="dropdown-profile-btn" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 rounded-xl transition-default">
+                    <i class="fa-solid fa-user text-xs w-4"></i>
+                    <span>View profile</span>
+                  </button>
+                  <button id="dropdown-prefs-btn" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 rounded-xl transition-default">
+                    <i class="fa-solid fa-sliders text-xs w-4"></i>
+                    <span>Preferences</span>
+                  </button>
                   <button id="dropdown-auth-btn" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/10 rounded-xl transition-default">
                     <i class="fa-solid fa-user text-xs"></i>
                     <span id="dropdown-auth-btn-label">Switch Account / Sign In</span>
                   </button>
                   <button id="dropdown-signout-btn" class="hidden w-full items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-xl transition-default">
-                    <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                    <i class="fa-solid fa-arrow-right-from-bracket text-xs w-4"></i>
                     <span>Sign Out</span>
                   </button>
                 </div>
@@ -2823,47 +2831,10 @@
     // ─────────────────────────────────────────────────────────────────
     // 8. HEADER — avatar menu
     // ─────────────────────────────────────────────────────────────────
-    const avatar = $('#user-avatar');
-    if (avatar) {
-      const menu = document.createElement('div');
-      menu.className = 'hidden z-[60] w-56 glass-card rounded-2xl shadow-2xl shadow-black/50 overflow-hidden';
-      menu.innerHTML = `
-        <div class="px-4 py-3 border-b border-slate-700/40">
-          <p data-user-name class="text-sm font-semibold text-slate-200">Account</p>
-          <p data-user-email class="text-[11px] text-slate-500">Local build</p>
-        </div>
-        <div class="p-1.5">
-          <button data-act="profile" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-400 hover:bg-slate-700/50 hover:text-white transition-default"><i class="fa-solid fa-user text-[11px] w-4"></i> View profile</button>
-          <button data-act="prefs" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-400 hover:bg-slate-700/50 hover:text-white transition-default"><i class="fa-solid fa-sliders text-[11px] w-4"></i> Preferences</button>
-          <button data-act="signout" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-default"><i class="fa-solid fa-arrow-right-from-bracket text-[11px] w-4"></i> Sign out</button>
-        </div>`;
-      document.body.appendChild(menu);
-      avatar.addEventListener('click', e => {
-        e.stopPropagation();
-        closePopovers(menu);
-        menu.classList.toggle('hidden');
-        if (!menu.classList.contains('hidden')) positionUnder(menu, avatar);
-      });
-      menu.addEventListener('click', e => {
-        const b = e.target.closest('button[data-act]');
-        if (!b) return;
-        menu.classList.add('hidden');
-        if (b.dataset.act === 'signout') {
-          // Was a stub from the single-user era: showed a toast claiming
-          // "signed out" and did nothing else — no /api/logout call, no
-          // session cleared, no redirect. A second, correctly wired sign-out
-          // button already exists (dropdown-signout-btn) — this makes the
-          // two identical instead of leaving a fake one live at all.
-          (async () => {
-            try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
-            window.location.reload();
-          })();
-          return;
-        }
-        window.switchView && window.switchView('nav-settings');
-      });
-      registerPopover(menu, avatar);
-    }
+    // The avatar menu lives in the auth block (#user-menu-dropdown). There
+    // used to be a second one here, built at runtime and bound to the same
+    // avatar, so one click opened two overlapping menus with two sign-out
+    // buttons — and under the tour overlay neither could be reached.
 
     // ─────────────────────────────────────────────────────────────────
     // 9. SETTINGS — Delete account confirmation
@@ -8090,7 +8061,6 @@
     {
       const spn = document.getElementById('settings-profile-name');
       if (spn && headerUserName) spn.textContent = headerUserName.textContent;
-      document.querySelectorAll('[data-user-name]').forEach(el => { if (headerUserName) el.textContent = headerUserName.textContent; });
     }
     const dropdownAuthBtn = document.getElementById('dropdown-auth-btn');
     const dropdownSignoutBtn = document.getElementById('dropdown-signout-btn');
@@ -8282,6 +8252,23 @@
       });
     }
 
+    ['dropdown-profile-btn', 'dropdown-prefs-btn'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.addEventListener('click', () => {
+        userMenuDropdown.classList.add('hidden');
+        window.switchView && window.switchView('nav-settings');
+      });
+    });
+
+    if (!serverMode) {
+      // Single-user build: no account to switch or sign out of. Offering
+      // either opened a sign-in form against a server that has no accounts.
+      if (dropdownAuthBtn) dropdownAuthBtn.classList.add('hidden');
+      if (dropdownSignoutBtn) dropdownSignoutBtn.classList.add('hidden');
+      if (dropdownUserName && headerUserName) dropdownUserName.textContent = headerUserName.textContent;
+      if (dropdownUserEmail) dropdownUserEmail.textContent = 'Local build — no account';
+    }
+
     if (dropdownAuthBtn) {
       dropdownAuthBtn.addEventListener('click', () => {
         userMenuDropdown.classList.add('hidden');
@@ -8386,8 +8373,8 @@
           // name, plan and address that belonged to nobody. Same source as
           // the header now; "Premium" is gone because no plan exists.
           const setText = (sel, v) => document.querySelectorAll(sel).forEach(el => { el.textContent = v; });
-          setText('#settings-profile-name, [data-user-name]', displayName);
-          setText('#settings-profile-email, [data-user-email]', currentUser.email);
+          setText('#settings-profile-name', displayName);
+          setText('#settings-profile-email', currentUser.email);
           setText('#settings-profile-plan', 'Hosted account');
           if (dropdownUserName) dropdownUserName.textContent = displayName;
           if (dropdownUserEmail) dropdownUserEmail.textContent = currentUser.email;

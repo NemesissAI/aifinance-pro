@@ -486,12 +486,24 @@ async def get_state(user=Depends(current_user)):
         return db.get_state(s, user["id"])
 
 
+# Keys the server writes and the page never sends. The page's save is the
+# bundle of *its* keys, whole, and this route used to store that bundle as
+# the whole state — so every save from the page erased aifp.tourDone, and
+# the tour came back on every load, over the top of everything. Reported as
+# "I can't sign out": the overlay was covering the menu.
+SERVER_OWNED_STATE = {"aifp.tourDone"}
+
+
 @app.post("/api/state")
 async def post_state(request: Request, user=Depends(current_user)):
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "State must be a JSON object.")
     with db.session() as s:
+        current = db.get_state(s, user["id"])
+        for k in SERVER_OWNED_STATE:
+            if k in current and k not in body:
+                body[k] = current[k]
         db.put_state(s, user["id"], body)
     return {"ok": True}
 
