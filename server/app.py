@@ -21,7 +21,7 @@ from pathlib import Path
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from authlib.integrations.starlette_client import OAuth, OAuthError
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -296,10 +296,48 @@ async def set_password(request: Request, user=Depends(current_user)):
 
 # ── statements ──────────────────────────────────────────────────────────────
 
+# The page has two upload callers with two wire formats, and both have to
+# work against this one route. The onboarding step sends multipart/form-data
+# (`file`, `password`). The import panel on the dashboard and in Settings
+# sends JSON — {filename, data: <base64>, password} — the contract of the
+# single-user PowerShell server it was written for. This route accepted
+# only the first, so every upload from the main panel came back 422 on the
+# hosted build while the same file went through fine in onboarding.
+#
+# The response is likewise a superset: the hosted fields (status, statementId,
+# count, warnings) plus the `output` text the panel's result card reads —
+# "Bank — Month" and the ✓ line — so "totals match" is reported the same way
+# in both builds, and a parse failure maps onto the status names the panel
+# already branches on (needs_password, needs_template).
+_PARSE_STATUS = {"password_required": "needs_password", "wrong_password": "needs_password",
+                 "no_template": "needs_template", "scanned": "scanned"}
+
+
+async def _read_upload(request: Request) -> tuple[bytes, str, str]:
+    """(bytes, filename, password) from either wire format."""
+    ctype = request.headers.get("content-type", "")
+    if ctype.startswith("application/json"):
+        body = await request.json()
+        import base64
+        raw = str(body.get("data", ""))
+        raw = raw.split(",", 1)[1] if raw.startswith("data:") else raw
+        try:
+            data = base64.b64decode(raw, validate=False)
+        except Exception:
+            raise HTTPException(400, "The file data was not valid base64.")
+        return data, str(body.get("filename") or "upload.pdf"), str(body.get("password") or "")
+    form = await request.form()
+    f = form.get("file")
+    if f is None or not hasattr(f, "read"):
+        # 422, as FastAPI's own File(...) validation answered before this
+        # route read the body itself — the tests pin that contract.
+        raise HTTPException(422, "No file in the request.")
+    return await f.read(), (getattr(f, "filename", None) or "upload.pdf"), str(form.get("password") or "")
+
+
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...), password: str = Form(""),
-                 user=Depends(current_user)):
-    data = await file.read()
+async def upload(request: Request, user=Depends(current_user)):
+    data, filename, password = await _read_upload(request)
     if not data:
         raise HTTPException(400, "Empty file.")
     if len(data) > MAX_PDF_BYTES:
@@ -309,10 +347,12 @@ async def upload(file: UploadFile = File(...), password: str = Form(""),
     try:
         payload = parse_api.parse_bytes(
             data, password=password or None,
-            profile=user["profile"], filename=file.filename or "upload.pdf")
+            profile=user["profile"], filename=filename)
     except parse_api.ParseError as e:
         # The PDF goes out of scope here: nothing was written anywhere.
-        return JSONResponse({"error": e.code, "detail": str(e)}, status_code=422)
+        return JSONResponse({"error": e.code, "detail": str(e),
+                             "status": _PARSE_STATUS.get(e.code, "failed"),
+                             "output": str(e)}, status_code=422)
     except Exception:
         # pikepdf/pdfplumber raise their own exception types for a corrupt or
         # non-PDF file — tested by uploading a PNG renamed to .pdf, which threw
@@ -320,8 +360,16 @@ async def upload(file: UploadFile = File(...), password: str = Form(""),
         # explanation. A user's mis-selected file is routine input, not a
         # server fault, and must never look like one.
         return JSONResponse(
-            {"error": "unreadable", "detail": "That file could not be read as a PDF."},
+            {"error": "unreadable", "detail": "That file could not be read as a PDF.",
+             "status": "failed", "output": "That file could not be read as a PDF."},
             status_code=422)
+
+    warnings = payload.get("warnings", [])
+    # The same lines the CLI parser prints, so the panel's result card reads
+    # the hosted answer exactly as it reads the local one.
+    output = f"{payload['bank']} — {payload.get('statementMonth', '')}\n" + (
+        "  ✓ totals match the statement's own summary" if not warnings
+        else "\n".join(f"  ! {w}" for w in warnings))
 
     sid = payload["statementId"]
     with db.session() as s:
@@ -329,35 +377,85 @@ async def upload(file: UploadFile = File(...), password: str = Form(""),
                          if x.statement_id == sid), None)
         if existing:
             if existing.sha256 == digest:
-                return {"status": "duplicate", "statementId": sid,
+                return {"status": "duplicate", "statementId": sid, "output": output,
                         "detail": "You have already imported this statement."}
             existing.payload, existing.sha256 = payload, digest
             existing.bank = payload["bank"]
             existing.period_end = payload["periodEnd"]
             s.commit()
-            return {"status": "replaced", "statementId": sid,
-                    "warnings": payload.get("warnings", [])}
+            return {"status": "replaced", "statementId": sid, "output": output,
+                    "count": len(payload["transactions"]), "warnings": warnings}
         s.add(db.Statement(user_id=user["id"], statement_id=sid,
                            bank=payload["bank"], period_end=payload["periodEnd"],
                            sha256=digest, payload=payload))
         s.commit()
-    return {"status": "imported", "statementId": sid,
-            "count": len(payload["transactions"]),
-            "warnings": payload.get("warnings", [])}
+    return {"status": "imported", "statementId": sid, "output": output,
+            "count": len(payload["transactions"]), "warnings": warnings}
 
 
 @app.get("/api/statements")
 async def statements(user=Depends(current_user)):
+    """Same item shape as the single-user server's, which is what the
+    Settings list reads: `file` is the months key (the statementId here, the
+    file name there) and is what the view/delete buttons send back; `period`
+    drives the period filter. Without them both buttons sent "undefined".
+    `unread` is the PDFs on disk nothing parsed — there are none here, the
+    PDF is never kept."""
     with db.session() as s:
         rows = db.user_statements(s, user["id"])
         return {"statements": [
-            {"statementId": r.statement_id, "bank": r.bank,
+            {"file": r.statement_id, "statementId": r.statement_id,
+             "bank": r.bank,
+             "period": (r.period_end or "")[:7],
              "periodEnd": r.period_end,
              "month": r.payload.get("statementMonth", ""),
              "count": len(r.payload.get("transactions", [])),
+             "source": r.payload.get("source", ""),
+             "fetchedAt": r.payload.get("fetchedAt"),
              "totalExpense": r.payload.get("summary", {}).get("totalExpense", 0),
              "totalIncome": r.payload.get("summary", {}).get("totalIncome", 0)}
-            for r in rows]}
+            for r in rows], "unread": []}
+
+
+@app.post("/api/statements/delete")
+async def delete_statement_by_key(request: Request, user=Depends(current_user)):
+    """The Settings list's delete button — {file: <months key>}, the
+    single-user server's contract. The REST route below does the same by
+    path; this exists so one page works against both servers."""
+    body = await request.json()
+    sid = str(body.get("file") or "")
+    with db.session() as s:
+        row = next((x for x in db.user_statements(s, user["id"])
+                    if x.statement_id == sid), None)
+        if row is None:
+            raise HTTPException(404, "No such statement on this account.")
+        s.delete(row)
+        s.commit()
+    return {"ok": True, "deleted": sid}
+
+
+@app.get("/api/logos")
+async def logos():
+    """Which bank logo files exist. The page asks once at boot and draws a
+    coloured monogram for any bank without one; with this route missing
+    every bank fell back to a monogram, which read as "the logos are gone"."""
+    d = ROOT / "logos"
+    if not d.is_dir():
+        return {"files": []}
+    return {"files": sorted(p.name for p in d.iterdir()
+                            if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".webp"})}
+
+
+@app.post("/api/fetch-mail")
+async def fetch_mail_unavailable(user=Depends(current_user)):
+    """Gmail import is a local-machine feature: it needs an OAuth token on
+    disk and writes parsed files into data/. Neither exists per account here.
+    Answer in the shape the button reads rather than 404, which it rendered
+    as a raw 'Not Found'."""
+    return JSONResponse({"error": "hosted",
+                         "output": "Gmail import is not available on the hosted build yet — "
+                                   "drop the PDF onto the import panel instead."},
+                        status_code=200)
 
 
 @app.get("/api/data")

@@ -1856,15 +1856,15 @@
               <div class="flex-1 space-y-2">
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-slate-500 w-20">Name</span>
-                  <span class="text-sm text-slate-200 font-medium">Talha Açık</span>
+                  <span id="settings-profile-name" class="text-sm text-slate-200 font-medium">—</span>
                 </div>
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-slate-500 w-20">Plan</span>
-                  <span class="text-sm text-blue-400 font-medium flex items-center gap-1.5"><i class="fa-solid fa-crown text-[10px]"></i> Premium</span>
+                  <span id="settings-profile-plan" class="text-sm text-slate-300 font-medium">Local build — no account</span>
                 </div>
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-slate-500 w-20">Email</span>
-                  <span class="text-sm text-slate-200 font-medium">talha@techcorp.com</span>
+                  <span id="settings-profile-email" class="text-sm text-slate-200 font-medium">—</span>
                 </div>
               </div>
             </div>
@@ -2829,8 +2829,8 @@
       menu.className = 'hidden z-[60] w-56 glass-card rounded-2xl shadow-2xl shadow-black/50 overflow-hidden';
       menu.innerHTML = `
         <div class="px-4 py-3 border-b border-slate-700/40">
-          <p class="text-sm font-semibold text-slate-200">Talha Açık</p>
-          <p class="text-[11px] text-slate-500">talha@techcorp.com</p>
+          <p data-user-name class="text-sm font-semibold text-slate-200">Account</p>
+          <p data-user-email class="text-[11px] text-slate-500">Local build</p>
         </div>
         <div class="p-1.5">
           <button data-act="profile" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-400 hover:bg-slate-700/50 hover:text-white transition-default"><i class="fa-solid fa-user text-[11px] w-4"></i> View profile</button>
@@ -3210,7 +3210,12 @@
       all()      { return store.get(LS.months, {}); },
       save(file, s) { const m = this.all(); m[file] = s; store.set(LS.months, m); },
       keys()     { return Object.keys(this.all()).sort(); },
-      periods()  { return [...new Set(this.keys().map(k => k.split('__')[0]))].sort(); },
+      // From each statement's own periodEnd, not from its key: the key is a
+      // file name locally ("2026-08__bank.json") and a statementId hosted
+      // ("bank-2026-08"), and splitting on "__" made every hosted statement
+      // its own period — the coach said "10 statement period(s)" for 2.
+      periods()  { const m = this.all();
+                   return [...new Set(Object.values(m).map(s => (s.periodEnd || '').slice(0, 7)).filter(Boolean))].sort(); },
       clear()    { store.del(LS.months); },
       remove(k)  { const m = this.all(); delete m[k]; store.set(LS.months, m); },
       allTxns()  {
@@ -6444,6 +6449,11 @@
       if (text) $('#drop-busy-text').textContent = text;
     }
 
+    // The local server answers 'parsed'; the hosted one 'imported',
+    // 'replaced' or 'duplicate' (same file again — nothing changed, nothing
+    // wrong). One page, both servers, so both spellings count as success.
+    const isImported = out => ['parsed', 'imported', 'replaced', 'duplicate'].includes(out && out.status);
+
     async function postPdf(file, password) {
       const res = await fetch('api/upload', {
         method: 'POST',
@@ -6515,7 +6525,7 @@
         try { out = await postPdf(file, pw); }
         catch { out = { status: 'error', output: 'Server unreachable' }; }
         busy(false);
-        if (out.status === 'parsed') { showParsed(file, out); await afterImport(); toast('Statement imported', 'success'); }
+        if (isImported(out)) { showParsed(file, out); await afterImport(); toast('Statement imported', 'success'); }
         else if (out.status === 'needs_password') { resultCard({ tone: 'bad', icon: 'fa-lock', title: esc(file.name), body: 'That password was rejected.' }); }
         else if (out.status === 'needs_template') { showNeedsTemplate(file, out); }
         else { resultCard({ tone: 'bad', icon: 'fa-circle-xmark', title: esc(file.name), body: esc((out.output || '').slice(0, 500)) }); }
@@ -6547,7 +6557,7 @@
         }
         busy(false);
 
-        if (out.status === 'parsed')            { imported++; showParsed(file, out); }
+        if (isImported(out))                     { imported++; showParsed(file, out); }
         else if (out.status === 'needs_password') showNeedsPassword(file);
         else if (out.status === 'needs_template') showNeedsTemplate(file, out);
         else resultCard({ tone: 'bad', icon: 'fa-circle-xmark', title: esc(file.name) + ' — failed',
@@ -8075,6 +8085,13 @@
     const headerUserBadge = document.getElementById('header-user-badge');
     const dropdownUserName = document.getElementById('dropdown-user-name');
     const dropdownUserEmail = document.getElementById('dropdown-user-email');
+    // Local build: no account, so the Settings card mirrors the header's
+    // name. The hosted path below overwrites both from /api/me.
+    {
+      const spn = document.getElementById('settings-profile-name');
+      if (spn && headerUserName) spn.textContent = headerUserName.textContent;
+      document.querySelectorAll('[data-user-name]').forEach(el => { if (headerUserName) el.textContent = headerUserName.textContent; });
+    }
     const dropdownAuthBtn = document.getElementById('dropdown-auth-btn');
     const dropdownSignoutBtn = document.getElementById('dropdown-signout-btn');
 
@@ -8365,6 +8382,13 @@
           window.__currentUserName = currentUser.name || '';
           const displayName = currentUser.name || currentUser.email.split('@')[0];
           if (headerUserName) headerUserName.textContent = displayName;
+          // Settings profile card and the user menu used to carry a seeded
+          // name, plan and address that belonged to nobody. Same source as
+          // the header now; "Premium" is gone because no plan exists.
+          const setText = (sel, v) => document.querySelectorAll(sel).forEach(el => { el.textContent = v; });
+          setText('#settings-profile-name, [data-user-name]', displayName);
+          setText('#settings-profile-email, [data-user-email]', currentUser.email);
+          setText('#settings-profile-plan', 'Hosted account');
           if (dropdownUserName) dropdownUserName.textContent = displayName;
           if (dropdownUserEmail) dropdownUserEmail.textContent = currentUser.email;
           if (headerUserBadge) headerUserBadge.textContent = 'Verified Account';

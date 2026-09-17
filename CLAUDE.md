@@ -696,6 +696,26 @@ Three things now stand between a user and that:
   command line. Same policy as sign-up, so a recovered account is not a weaker
   one. It also bumps `session_version`.
 
+## One page, two servers — the parity rule
+
+`index.html` is served by both `.claude/static-server.ps1` (single-user,
+4173) and `server/app.py` (multi-user, 8000). **Every `fetch('api/…')` in
+the page must be answered by both, in the same shape.** The audit that
+proved this: enumerate the page's calls, enumerate each server's routes,
+diff. Five gaps turned up at once, each reported by the user as a separate
+"it worked before": `/api/logos` (monograms instead of logos),
+`/api/statements/delete` (the Settings delete button 404'd),
+`/api/statements` missing `file`/`period` (view and delete sent
+"undefined"), `/api/upload` accepting only multipart (the import panel sends
+JSON+base64, so every upload outside onboarding was 422), and
+`/api/fetch-mail` (raw 404 in the mail note). Run that diff again whenever
+either side gains a route.
+
+Two shapes the page depends on and the key it uses for a statement:
+locally the file name, hosted the `statementId`. `months.periods()` used
+to split the key on `__` and reported ten periods for two. Derive from the
+payload, never from the key.
+
 ## Moving the local build into a hosted account
 
 `server/migrate_local.py EMAIL` copies `data/*.json`, `profile.json` and
