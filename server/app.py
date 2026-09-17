@@ -285,6 +285,11 @@ async def set_password(request: Request, user=Depends(current_user)):
         if await passwords.is_breached(password):
             raise HTTPException(400, "That password appears in a known breach. Pick another.")
         u.password_hash = hasher.hash(passwords.normalize(password))
+        # A changed password should mean whoever had the old one is out —
+        # every other device's cookie stops here. This session carries the
+        # new version so the person doing the changing is not signed out too.
+        u.session_version = (u.session_version or 0) + 1
+        request.session["sv"] = u.session_version
         s.commit()
     return {"ok": True}
 

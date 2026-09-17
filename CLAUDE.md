@@ -676,6 +676,26 @@ sign-up form; the first version interpolated it straight into `innerHTML`, so
 whoever registered could run script in the one browser guaranteed to belong to
 the owner. Escape every cell.
 
+## A locked-out account, and why it happened
+
+There is no "forgot password": the app sends no email, so it cannot prove who
+is asking. The sign-up form used to ask for the password once, masked, with
+no way to see what was typed — so one typo at registration locked the account
+with no way back in from the browser. That is exactly what happened to the
+owner's own account, and "my account is gone" was the report.
+
+Three things now stand between a user and that:
+
+- **Show/hide on every password field** (`data-toggle-password`), plus a hint
+  on the sign-up tab saying there is no reset link.
+- **Settings → Change password** for a signed-in user. It bumps
+  `session_version`, so every *other* device is signed out, and writes the new
+  version into the current session so the person changing it is not.
+- **`server/set_password.py EMAIL`** — the recovery path. Run on the machine
+  the server runs on; the password is typed at a hidden prompt, never on the
+  command line. Same policy as sign-up, so a recovered account is not a weaker
+  one. It also bumps `session_version`.
+
 ## Presenting the first-run experience
 
 Showing "this is what a new user sees" needs an account that *is* new every
