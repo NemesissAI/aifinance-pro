@@ -30,10 +30,15 @@ mail-log.json                  which mails have been imported — the dedup ledg
 Run it:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .claude\static-server.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File start-server.ps1
 ```
 
-Then <http://localhost:4173>. It must be `http://` — `fetch()` cannot read files
+Then <http://localhost:4173>. That is the **multi-user** server (`server/app.py`)
+on the port the old single-user one used, so bookmarks and habits keep
+working; the launcher stops whatever held the port first and reads secrets
+from `.env.local` (gitignored). `.claude\static-server.ps1` is the old
+single-user server — it has no accounts and no sign-out, and opening it by
+mistake is what "the sign-out button is gone" was. It must be `http://` — `fetch()` cannot read files
 from a `file://` origin, and the upload API does not exist there.
 
 ## Where the user's decisions live

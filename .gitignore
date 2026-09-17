@@ -24,3 +24,6 @@ design-samples.html
 # Server log from a detached uvicorn start — runtime output, not source.
 .server.log
 .server.log.err
+
+# Server secrets for start-server.ps1 (admin list, demo password).
+.env.local
