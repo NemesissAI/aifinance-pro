@@ -572,17 +572,76 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    /* ── Print / Executive Report Layout ── */
+    /* ── Executive Report ──
+       A document rendered on screen, not a print stylesheet over the
+       dashboard: the button used to call window.print() and nothing else,
+       which the desktop app's webview ignores outright — the same class of
+       dead control as window.prompt() and contextmenu. On screen it is the
+       deliverable; printing is an extra that works where the host allows. */
     #print-report-header { display: none; }
+    #report-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(2, 6, 23, .82);
+      backdrop-filter: blur(6px); overflow-y: auto; opacity: 0; transition: opacity .25s ease; }
+    #report-overlay.open { opacity: 1; }
+    #report-doc { --ink: #0f172a; --ink-2: #334155; --ink-3: #64748b; --rule: #e2e8f0; --paper: #fff;
+      --in: #0f9d6b; --out: #d0432f; --accent: #2563eb;
+      max-width: 880px; margin: 32px auto; background: var(--paper); color: var(--ink);
+      border-radius: 18px; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6);
+      font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+    #report-doc .rp-head { padding: 36px 44px 28px; border-bottom: 1px solid var(--rule);
+      display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+    #report-doc .rp-brand { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; }
+    #report-doc h1 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 6px 0 4px; color: var(--ink); }
+    #report-doc .rp-sub { font-size: 13px; color: var(--ink-2); }
+    #report-doc .rp-meta { text-align: right; font-size: 12px; color: var(--ink-3); line-height: 1.7; white-space: nowrap; }
+    #report-doc .rp-meta strong { color: var(--ink); font-weight: 600; }
+    #report-doc section { padding: 28px 44px; border-bottom: 1px solid var(--rule); }
+    #report-doc section:last-of-type { border-bottom: 0; }
+    #report-doc h2 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; margin: 0 0 16px; }
+    #report-doc .rp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    #report-doc .rp-kpi { border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; }
+    #report-doc .rp-kpi .l { font-size: 11px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+    #report-doc .rp-kpi .v { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    #report-doc .rp-kpi .s { font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+    #report-doc .in { color: var(--in); } #report-doc .out { color: var(--out); }
+    #report-doc .rp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+    #report-doc .rp-health { display: flex; gap: 22px; align-items: center; }
+    #report-doc .rp-ring { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+      background: conic-gradient(var(--accent) calc(var(--p) * 1%), #e2e8f0 0); }
+    #report-doc .rp-ring > div { width: 74px; height: 74px; border-radius: 50%; background: var(--paper); display: grid; place-items: center;
+      font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+    #report-doc .rp-split { display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin: 10px 0 8px; }
+    #report-doc .rp-legend { display: flex; gap: 18px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+    #report-doc .rp-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    #report-doc table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    #report-doc th { text-align: left; font-size: 11px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+      padding: 0 0 10px; border-bottom: 1px solid var(--rule); }
+    #report-doc td { padding: 9px 0; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    #report-doc td.num, #report-doc th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #report-doc .rp-bar { height: 6px; border-radius: 3px; background: #f1f5f9; overflow: hidden; }
+    #report-doc .rp-bar > i { display: block; height: 100%; border-radius: 3px; }
+    #report-doc .rp-note { font-size: 12px; color: var(--ink-3); line-height: 1.7; }
+    #report-doc .rp-note b { color: var(--ink-2); font-weight: 600; }
+    #report-doc .rp-foot { padding: 18px 44px; background: #f8fafc; font-size: 11px; color: var(--ink-3); display: flex; justify-content: space-between; gap: 16px; }
+    #report-doc canvas { max-width: 100%; }
+    #report-toolbar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; gap: 8px; max-width: 880px; margin: 0 auto; padding: 14px 0 0; }
+    #report-toolbar button { font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
+      background: rgba(15,23,42,.85); color: #e2e8f0; cursor: pointer; }
+    #report-toolbar button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+    #report-toolbar button:hover { filter: brightness(1.12); }
+    @media (max-width: 720px) {
+      #report-doc { margin: 12px; border-radius: 14px; }
+      #report-doc .rp-head, #report-doc section, #report-doc .rp-foot { padding-left: 22px; padding-right: 22px; }
+      #report-doc .rp-kpis { grid-template-columns: 1fr 1fr; }
+      #report-doc .rp-two { grid-template-columns: 1fr; }
+      #report-doc .rp-head { flex-direction: column; } #report-doc .rp-meta { text-align: left; }
+    }
     @media print {
-      body { background: #fff !important; color: #0f172a !important; }
-      #sidebar, #chat-toggle-btn, #chat-panel, .toast-container, #tour-overlay, #auth-modal, #set-password-modal, #scenario-simulator-modal, button:not(.print-keep), select, .no-print { display: none !important; }
-      .glass-card { background: #fff !important; border: 1px solid #cbd5e1 !important; box-shadow: none !important; page-break-inside: avoid; }
-      .text-white { color: #0f172a !important; }
-      .text-slate-200, .text-slate-300 { color: #1e293b !important; }
-      .text-slate-400, .text-slate-500 { color: #475569 !important; }
-      main { overflow: visible !important; padding: 0 !important; }
-      #print-report-header { display: block !important; margin-bottom: 2rem; border-bottom: 2px solid #0f172a; padding-bottom: 1rem; }
+      body > *:not(#report-overlay) { display: none !important; }
+      #report-overlay { position: static; background: #fff; backdrop-filter: none; opacity: 1; overflow: visible; }
+      #report-toolbar { display: none !important; }
+      #report-doc { box-shadow: none; margin: 0; max-width: none; border-radius: 0; }
+      #report-doc section { page-break-inside: avoid; }
+      @page { margin: 14mm; }
     }
 
   </style>
@@ -3758,6 +3817,61 @@
       const everyCycle = window.__allCycleTxns.filter(t => !activeFile || t._file === activeFile);
       // The Transactions view layers its own filters and sorting on top.
       if (typeof applyTxnView === 'function') applyTxnView();
+
+      // ── Executive report snapshot ──
+      // The report lives in its own <script> block and cannot see any of
+      // this, so the figures are published from here — the same income,
+      // expense, net, health score and categoryTotals() the cards just
+      // painted, not a second computation that could drift from them.
+      // Published on every repaint, so it is never stale.
+      {
+        const cycleFigures = rows => {
+          const r = rows.filter(t => (t.flow || 'real') === 'real');
+          const inc = r.filter(t => t.type === 'income' && !isSpendCategory(t.category))
+                       .reduce((s, t) => s + t.amount, 0);
+          const ref = r.filter(isRefund).reduce((s, t) => s + t.amount, 0);
+          const exp = r.filter(t => t.type === 'expense')
+                       .reduce((s, t) => s + Math.abs(t.amount), 0) - ref;
+          return { income: inc, expense: exp, net: inc - exp };
+        };
+        const byCycle = {};
+        everyCycle.forEach(t => (byCycle[cycleOf(t.date)] ||= []).push(t));
+        const series = Object.keys(byCycle).sort().map(k => ({
+          key: k, label: cycleLabel(k), ...cycleFigures(byCycle[k]),
+        }));
+
+        const spendBy = (rows, keyFn) => {
+          const m = {};
+          rows.filter(t => (t.flow || 'real') === 'real' && t.type === 'expense')
+              .forEach(t => { const k = keyFn(t) || '—'; m[k] = (m[k] || 0) + Math.abs(t.amount); });
+          return Object.entries(m).sort((a, b) => b[1] - a[1]);
+        };
+        const cats = Object.entries(categoryTotals(txns))
+          .filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+
+        const subList = subs.all();
+        window.__reportData = {
+          generatedAt: new Date(),
+          holder: window.__currentUserName || '',
+          period: activePeriod === 'all'
+            ? (periods.length ? `${cycleLabel(periods[0]).split(' – ')[0]} – ${cycleLabel(periods[periods.length - 1]).split(' – ').pop()}` : 'All periods')
+            : cycleLabel(activePeriod),
+          periodCount: activePeriod === 'all' ? periods.length : 1,
+          statements: months.keys().length,
+          txCount: txns.length, realCount: real.length, excluded,
+          income, expense, net, rate, invested, cashIncome, unclassifiedIn,
+          healthScore,
+          healthLabel: healthScore >= 80 ? 'Excellent' : healthScore >= 60 ? 'Good' : 'Needs attention',
+          split: { needs: pctNeeds, wants: pctWants, savings: pctSavings },
+          categories: cats.map(([name, amount]) => ({ name, amount, rgb: catRgb(name) })),
+          series,
+          topMerchants: spendBy(txns, t => t.merchant).slice(0, 6),
+          accounts: spendBy(txns, t => t._bank),
+          subscriptions: { count: subList.length,
+                           monthly: subList.reduce((s, x) => s + perMonth(x), 0) },
+          currency: (window.__cur || {}).code || 'TRY',
+        };
+      }
 
       // ── quick stats on the Transactions view ──
       const stats = $$('#view-transactions .grid .text-2xl');
@@ -8136,15 +8250,13 @@
     if (sliderCut) sliderCut.addEventListener('input', updateSimulation);
     if (sliderInvest) sliderInvest.addEventListener('input', updateSimulation);
 
-    // ── Executive Report Export ──
+    // ── Executive Report ──
+    // Rendered in its own block below (window.__openReport); this was a bare
+    // window.print(), which the desktop webview ignores — a dead button.
     const exportBtn = document.getElementById('export-report-btn');
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        const timeEl = document.getElementById('print-timestamp');
-        const userEl = document.getElementById('print-account-name');
-        if (timeEl) timeEl.textContent = `Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
-        if (userEl && currentUser && currentUser.name) userEl.textContent = currentUser.name;
-        window.print();
+        if (typeof window.__openReport === 'function') window.__openReport();
       });
     }
 
@@ -8464,6 +8576,245 @@
       </div>
     </div>
   </div>
+
+  <!-- ─────────────── EXECUTIVE REPORT ─────────────── -->
+  <script>
+  (function () {
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+      c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const money = n => '₺' + Math.abs(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const signed = n => (n < 0 ? '−' : '+') + money(n);
+    const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+    const toast = (m, k) => (window.__toast || (() => {}))(m, k || 'info');
+
+    let overlay = null, charts = [];
+
+    function destroy() {
+      charts.forEach(c => { try { c.destroy(); } catch (e) {} });
+      charts = [];
+      if (overlay) { overlay.remove(); overlay = null; }
+      document.body.style.overflow = '';
+    }
+
+    function build(d) {
+      const rate = d.rate || 0;
+      const totalCat = d.categories.reduce((s, c) => s + c.amount, 0) || 1;
+      const totalAcc = d.accounts.reduce((s, [, v]) => s + v, 0) || 1;
+      const topMerchMax = (d.topMerchants[0] || [0, 1])[1] || 1;
+      const gen = d.generatedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      const kpi = (l, v, cls, s) => `
+        <div class="rp-kpi"><div class="l">${l}</div>
+          <div class="v ${cls || ''}">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
+
+      const catRows = d.categories.map(c => `
+        <tr>
+          <td style="width:38%"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:rgb(${c.rgb});margin-right:8px;vertical-align:-1px"></span>${esc(c.name)}</td>
+          <td><div class="rp-bar"><i style="width:${pct(c.amount, totalCat)}%;background:rgb(${c.rgb})"></i></div></td>
+          <td class="num" style="width:12%;color:var(--ink-3)">${pct(c.amount, totalCat)}%</td>
+          <td class="num" style="width:22%"><b>${money(c.amount)}</b></td>
+        </tr>`).join('') || `<tr><td colspan="4" class="rp-note">No categorised spending in this period.</td></tr>`;
+
+      const merchRows = d.topMerchants.map(([m, v], i) => `
+        <tr>
+          <td style="width:8%;color:var(--ink-3)">${i + 1}</td>
+          <td>${esc(m)}</td>
+          <td style="width:30%"><div class="rp-bar"><i style="width:${pct(v, topMerchMax)}%;background:var(--out)"></i></div></td>
+          <td class="num" style="width:24%"><b>${money(v)}</b></td>
+        </tr>`).join('') || `<tr><td colspan="4" class="rp-note">No merchant spending in this period.</td></tr>`;
+
+      const accRows = d.accounts.map(([b, v]) => `
+        <tr><td>${esc(b)}</td>
+          <td class="num" style="width:14%;color:var(--ink-3)">${pct(v, totalAcc)}%</td>
+          <td class="num" style="width:26%"><b>${money(v)}</b></td></tr>`).join('');
+
+      const notes = [];
+      if (d.excluded) notes.push(`<b>${d.excluded}</b> of ${d.txCount} rows were transfers between own accounts, card payments, bridges or matched pairs and are excluded from every figure above.`);
+      if (d.unclassifiedIn > 0) notes.push(`<b>${money(d.unclassifiedIn)}</b> of the income is still unclassified and may turn out to be repayments rather than earnings.`);
+      if (d.cashIncome > 0) notes.push(`<b>${money(d.cashIncome)}</b> of cash income was entered by hand — no statement can see it.`);
+      if (d.invested > 0) notes.push(`<b>${money(d.invested)}</b> went to investments; it is neither income nor spending here.`);
+      notes.push(`Every statement behind these numbers was verified against the bank's own printed totals before being counted.`);
+
+      return `
+      <div id="report-toolbar">
+        <button id="rp-print" class="primary"><i class="fa-solid fa-print" style="margin-right:6px"></i>Print / Save as PDF</button>
+        <button id="rp-close"><i class="fa-solid fa-xmark" style="margin-right:6px"></i>Close</button>
+      </div>
+      <div id="report-doc">
+        <div class="rp-head">
+          <div>
+            <div class="rp-brand">AIFinance Pro</div>
+            <h1>Executive Financial Briefing</h1>
+            <div class="rp-sub">${esc(d.period)}${d.periodCount > 1 ? ` · ${d.periodCount} statement cycles` : ''}</div>
+          </div>
+          <div class="rp-meta">
+            ${d.holder ? `Prepared for <strong>${esc(d.holder)}</strong><br>` : ''}
+            Generated <strong>${gen}</strong><br>
+            ${d.statements} statement${d.statements === 1 ? '' : 's'} · ${d.realCount} counted rows
+          </div>
+        </div>
+
+        <section>
+          <h2>Headline</h2>
+          <div class="rp-kpis">
+            ${kpi('Income', money(d.income), 'in')}
+            ${kpi('Spending', money(d.expense), 'out')}
+            ${kpi('Net cash flow', signed(d.net), d.net >= 0 ? 'in' : 'out', d.income ? `${pct(d.expense, d.income)}% of income spent` : '')}
+            ${kpi('Savings rate', `${rate.toFixed(1)}%`, rate >= 20 ? 'in' : rate >= 0 ? '' : 'out', 'Target 20%')}
+          </div>
+        </section>
+
+        <section>
+          <div class="rp-two">
+            <div>
+              <h2>Financial health</h2>
+              <div class="rp-health">
+                <div class="rp-ring" style="--p:${d.healthScore}"><div>${d.healthScore}</div></div>
+                <div>
+                  <div style="font-size:16px;font-weight:700">${d.healthLabel}</div>
+                  <div class="rp-note" style="margin-top:4px">Scored 0–100 from savings rate, cash-flow sign, spending-to-income ratio and history depth.</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h2>50 / 30 / 20 allocation</h2>
+              <div class="rp-split">
+                <i style="width:${d.split.needs}%;background:#2563eb"></i>
+                <i style="width:${d.split.wants}%;background:#f59e0b"></i>
+                <i style="width:${d.split.savings}%;background:#0f9d6b"></i>
+              </div>
+              <div class="rp-legend">
+                <span><i style="background:#2563eb"></i>Needs ${d.split.needs}% <span style="color:var(--ink-3)">/ 50</span></span>
+                <span><i style="background:#f59e0b"></i>Wants ${d.split.wants}% <span style="color:var(--ink-3)">/ 30</span></span>
+                <span><i style="background:#0f9d6b"></i>Savings ${d.split.savings}% <span style="color:var(--ink-3)">/ 20</span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div class="rp-two">
+            <div>
+              <h2>Where the money went</h2>
+              <div style="height:220px;position:relative"><canvas id="rp-donut"></canvas></div>
+            </div>
+            <div>
+              <h2>Cycle by cycle</h2>
+              <div style="height:220px;position:relative"><canvas id="rp-bars"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Spending by category</h2>
+          <table><thead><tr><th>Category</th><th></th><th class="num">Share</th><th class="num">Amount</th></tr></thead>
+          <tbody>${catRows}</tbody></table>
+        </section>
+
+        <section>
+          <div class="rp-two">
+            <div>
+              <h2>Top merchants</h2>
+              <table><thead><tr><th>#</th><th>Merchant</th><th></th><th class="num">Spent</th></tr></thead>
+              <tbody>${merchRows}</tbody></table>
+            </div>
+            <div>
+              <h2>By account</h2>
+              <table><thead><tr><th>Bank</th><th class="num">Share</th><th class="num">Spent</th></tr></thead>
+              <tbody>${accRows || '<tr><td colspan="3" class="rp-note">—</td></tr>'}</tbody></table>
+              ${d.subscriptions.count ? `
+              <h2 style="margin-top:26px">Recurring commitments</h2>
+              <div class="rp-note"><b>${d.subscriptions.count}</b> subscription${d.subscriptions.count === 1 ? '' : 's'} · <b>${money(d.subscriptions.monthly)}</b> per month, entered by hand.</div>` : ''}
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>How to read these numbers</h2>
+          <ul class="rp-note" style="padding-left:18px;margin:0">${notes.map(n => `<li>${n}</li>`).join('')}</ul>
+        </section>
+
+        <div class="rp-foot">
+          <span>AIFinance Pro · ${esc(d.period)}</span>
+          <span>Figures are the dashboard's own — same rules, same rows.</span>
+        </div>
+      </div>`;
+    }
+
+    function drawCharts(d) {
+      if (typeof Chart === 'undefined') return;
+      const base = { responsive: true, maintainAspectRatio: false, animation: { duration: 400 } };
+      const font = { family: 'Inter, system-ui, sans-serif', size: 11 };
+
+      const donutEl = document.getElementById('rp-donut');
+      if (donutEl && d.categories.length) {
+        const top = d.categories.slice(0, 8);
+        charts.push(new Chart(donutEl, {
+          type: 'doughnut',
+          data: { labels: top.map(c => c.name),
+                  datasets: [{ data: top.map(c => c.amount), backgroundColor: top.map(c => `rgb(${c.rgb})`),
+                               borderColor: '#fff', borderWidth: 2, hoverOffset: 4 }] },
+          options: { ...base, cutout: '62%',
+            plugins: { legend: { position: 'right', labels: { font, color: '#334155', boxWidth: 10, padding: 10 } },
+                       tooltip: { callbacks: { label: c => ` ${c.label}: ${money(c.parsed)}` } } } },
+        }));
+      }
+
+      const barEl = document.getElementById('rp-bars');
+      if (barEl && d.series.length) {
+        charts.push(new Chart(barEl, {
+          type: 'bar',
+          data: { labels: d.series.map(s => s.label.replace(/, \d{4}$/, '')),
+                  datasets: [
+                    { label: 'Income',   data: d.series.map(s => s.income),  backgroundColor: '#0f9d6b', borderRadius: 4 },
+                    { label: 'Spending', data: d.series.map(s => s.expense), backgroundColor: '#d0432f', borderRadius: 4 },
+                  ] },
+          options: { ...base,
+            scales: { x: { grid: { display: false }, ticks: { font, color: '#64748b' } },
+                      y: { grid: { color: '#f1f5f9' }, ticks: { font, color: '#64748b',
+                           callback: v => '₺' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v) } } },
+            plugins: { legend: { position: 'top', align: 'end', labels: { font, color: '#334155', boxWidth: 10 } },
+                       tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}` } } } },
+        }));
+      }
+    }
+
+    window.__openReport = function () {
+      const d = window.__reportData;
+      if (!d || !d.txCount) {
+        toast('Import a statement first — there is nothing to report yet.', 'info');
+        return;
+      }
+      destroy();
+      overlay = document.createElement('div');
+      overlay.id = 'report-overlay';
+      overlay.innerHTML = build(d);
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      drawCharts(d);
+
+      overlay.querySelector('#rp-close').addEventListener('click', destroy);
+      overlay.addEventListener('click', e => { if (e.target === overlay) destroy(); });
+      document.addEventListener('keydown', function onKey(e) {
+        if (e.key === 'Escape') { destroy(); document.removeEventListener('keydown', onKey); }
+      });
+      overlay.querySelector('#rp-print').addEventListener('click', () => {
+        // The desktop app's webview has no print dialog; it neither throws
+        // nor opens anything. Say so rather than look dead a second time.
+        try {
+          const before = Date.now();
+          window.print();
+          if (Date.now() - before < 50) {
+            setTimeout(() => toast('If no print dialog opened, open this page in Chrome or Edge and press Ctrl+P.', 'info'), 400);
+          }
+        } catch (e) {
+          toast('Printing is not available here — open the app in a browser and press Ctrl+P.', 'info');
+        }
+      });
+    };
+  })();
+  </script>
 
   <!-- Usage telemetry — feeds the creator dashboard at /admin.
        Only ever runs against the hosted server: the single-user local build
