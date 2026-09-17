@@ -676,6 +676,29 @@ sign-up form; the first version interpolated it straight into `innerHTML`, so
 whoever registered could run script in the one browser guaranteed to belong to
 the owner. Escape every cell.
 
+## Presenting the first-run experience
+
+Showing "this is what a new user sees" needs an account that *is* new every
+time, and the owner's own account is the one thing that must never be wiped
+to get there. So there is a fixed demo login, `demo@aifinance.local`, whose
+password is `AIFP_DEMO_PASSWORD` (environment, never source — a fixed one
+would ship in a public repo) and whose state is reset by **Reset demo
+account** in the sidebar's *Presenting* block, admin-only. Reset wipes name,
+statements, decisions, telemetry and bumps `session_version`, so a browser
+still signed in as the demo from the last talk is signed out too. Then sign
+out, sign in as the demo, and the onboarding runs from step 1.
+
+**Replay tour** re-opens the tour overlay on the current account and touches
+nothing. Onboarding itself is deliberately *not* replayable there: its first
+step re-saves the holder name and its last re-saves the cycle day, and a
+presenter clicking through would overwrite real settings.
+
+```powershell
+$env:AIFP_ADMIN_EMAILS = "you@example.com"
+$env:AIFP_DEMO_PASSWORD = "a-real-password-of-12-plus-chars"
+.venv\Scripts\python.exe -m uvicorn server.app:app --port 8000
+```
+
 ## Not built
 
 - **Scheduled/automatic mail polling.** The button is manual on purpose. A

@@ -712,6 +712,22 @@
           </span>
           <span class="font-medium text-sm">Creator</span>
         </a>
+        <!-- Presenter tools — same admin gate as the Creator link. -->
+        <div data-admin-only class="hidden mt-2 pt-3 border-t border-slate-800/70 space-y-1">
+          <p class="px-4 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Presenting</p>
+          <button id="demo-replay-tour" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-default group text-left">
+            <span class="w-9 h-9 rounded-lg bg-slate-800/50 flex items-center justify-center group-hover:bg-slate-700/50 transition-default">
+              <i class="fa-solid fa-circle-play text-slate-500 group-hover:text-slate-300 text-sm"></i>
+            </span>
+            <span class="font-medium text-sm">Replay tour</span>
+          </button>
+          <button id="demo-reset-account" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-default group text-left">
+            <span class="w-9 h-9 rounded-lg bg-slate-800/50 flex items-center justify-center group-hover:bg-slate-700/50 transition-default">
+              <i class="fa-solid fa-user-clock text-slate-500 group-hover:text-slate-300 text-sm"></i>
+            </span>
+            <span class="font-medium text-sm">Reset demo account</span>
+          </button>
+        </div>
       </nav>
 
       <!-- Bottom Widget: Top Counterparties -->
@@ -7987,7 +8003,35 @@
       await populateTourMetrics();
       if (tourOverlay) tourOverlay.classList.add('open');
     }
-    
+
+    // ── Presenter tools (sidebar, admin only) ──
+    // "Replay tour" re-opens the tour on the current account without
+    // touching anything — onboarding is not replayed here because its first
+    // step re-saves the holder name and the last re-saves the cycle day,
+    // and a presenter skipping through would overwrite real settings. The
+    // full first-run lives on the demo account instead, which is disposable.
+    const replayBtn = document.getElementById('demo-replay-tour');
+    if (replayBtn) replayBtn.addEventListener('click', () => showTour());
+
+    const resetDemoBtn = document.getElementById('demo-reset-account');
+    if (resetDemoBtn) resetDemoBtn.addEventListener('click', async () => {
+      const say = (m, k) => (window.__toast || (() => {}))(m, k);
+      resetDemoBtn.disabled = true;
+      try {
+        const res = await fetch('/api/admin/demo/reset', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          say(`Demo account is fresh. Sign out, then sign in as <strong>${data.email}</strong> to show the first-run flow.`, 'success', 8000);
+        } else {
+          say(data.detail || `Could not reset the demo account (${res.status}).`, 'error', 6000);
+        }
+      } catch (e) {
+        say('Could not reach the server.', 'error');
+      } finally {
+        resetDemoBtn.disabled = false;
+      }
+    });
+
     if (tourCloseBtn) {
       tourCloseBtn.addEventListener('click', async () => {
         tourOverlay.classList.remove('open');

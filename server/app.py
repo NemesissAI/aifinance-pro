@@ -506,6 +506,55 @@ async def onboarding_tour_done(user=Depends(current_user)):
     return {"ok": True}
 
 
+# ── the demo account, for presenting the first-run experience ──────────────
+#
+# Showing someone "this is what a new user sees" needs an account that *is*
+# new every time — no name, no statements, no tour flag — and the owner's own
+# account is the one thing that must never be wiped to get there. So there
+# is a fixed demo login whose state is reset by an admin-only call, and the
+# presenter signs in as it. The password comes from the environment: a
+# fixed one in the source would ship in a public repo.
+
+DEMO_EMAIL = "demo@aifinance.local"
+
+
+@app.post("/api/admin/demo/reset")
+async def admin_demo_reset(user=Depends(current_user)):
+    if not _is_admin(user["email"]):
+        raise HTTPException(403, "Forbidden")
+    password = os.environ.get("AIFP_DEMO_PASSWORD", "")
+    if not password:
+        raise HTTPException(503, "Set AIFP_DEMO_PASSWORD on the server to enable the demo account.")
+    try:
+        passwords.check(password, email=DEMO_EMAIL, name="Demo")
+    except passwords.WeakPassword as e:
+        raise HTTPException(503, f"AIFP_DEMO_PASSWORD is too weak: {e}")
+
+    with db.session() as s:
+        u = db.user_by_email(s, DEMO_EMAIL)
+        if u is None:
+            u = db.User(email=DEMO_EMAIL, profile={})
+            s.add(u)
+            s.flush()
+        u.name = "Demo Account"
+        u.password_hash = hasher.hash(passwords.normalize(password))
+        u.profile = {}                       # no holder name → onboarding step 1
+        u.google_sub = None
+        u.total_time_seconds = 0
+        u.features_used = {}
+        u.session_count = 0
+        u.last_seen_at = None
+        # Any browser still signed in as the demo from the last presentation
+        # is signed out by this, so two sessions never share the reset.
+        u.session_version = (u.session_version or 0) + 1
+        s.query(db.Statement).filter_by(user_id=u.id).delete()
+        state = s.get(db.UserState, u.id)
+        if state is not None:
+            s.delete(state)
+        s.commit()
+    return {"ok": True, "email": DEMO_EMAIL}
+
+
 @app.on_event("startup")
 def _startup() -> None:
     db.init()
