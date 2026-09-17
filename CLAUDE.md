@@ -696,6 +696,24 @@ Three things now stand between a user and that:
   command line. Same policy as sign-up, so a recovered account is not a weaker
   one. It also bumps `session_version`.
 
+## Moving the local build into a hosted account
+
+`server/migrate_local.py EMAIL` copies `data/*.json`, `profile.json` and
+`user-state.json` into one account, backing the database up first.
+Re-uploading the PDFs is **not** equivalent, for two reasons found the hard
+way: the two Ziraat vadesiz statements are hand-entered from scans with no
+text layer, so no upload can ever read them; and every statement uploaded
+before the profile carried the bridge/trust/regular-income rules was parsed
+*without* them, so its `flow` labels were wrong — the local JSON already has
+the right ones.
+
+**Row keys change shape between builds.** Matches and dismissals are keyed
+`<months key>#<transaction id>`; locally the months key is the file name,
+hosted it is the `statementId`. Copied verbatim, every match points at a row
+that does not exist and vanishes without a word — that was "all my matches
+are gone". The script rewrites them. Anything new that stores a row key
+needs the same treatment.
+
 ## Presenting the first-run experience
 
 Showing "this is what a new user sees" needs an account that *is* new every
