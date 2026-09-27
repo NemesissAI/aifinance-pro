@@ -1806,7 +1806,29 @@
         <div id="view-ai-coach" class="page-view hidden space-y-6">
           <div>
             <h2 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">AI Finance Coach</h2>
-            <p class="text-sm text-slate-500 mt-1">Personalized insights powered by machine learning</p>
+            <p class="text-sm text-slate-500 mt-1">Set a goal — the coach works out how fast your own spending gets you there</p>
+          </div>
+
+          <!-- Goal coach: a target, the pace your statements actually show,
+               which categories would get you there sooner, and which recent
+               charges pushed it back. Rendered by the GOAL COACH block. -->
+          <div class="glass-card rounded-2xl p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div class="flex items-center gap-3">
+                <span class="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center"><i class="fa-solid fa-bullseye text-emerald-400"></i></span>
+                <div>
+                  <h3 class="text-base font-bold text-white">Goals</h3>
+                  <p id="goal-pace" class="text-xs text-slate-500">Import a statement to measure your saving pace.</p>
+                </div>
+              </div>
+            </div>
+            <form id="goal-form" class="grid grid-cols-1 sm:grid-cols-[1fr_160px_160px_auto] gap-2 mb-5">
+              <input id="goal-name" required maxlength="60" placeholder="What do you want to buy? e.g. iPhone 15" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+              <input id="goal-price" required type="number" min="1" step="1" placeholder="Price ₺" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+              <input id="goal-saved" type="number" min="0" step="1" placeholder="Already saved ₺" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+              <button type="submit" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-default"><i class="fa-solid fa-plus mr-1.5"></i>Add goal</button>
+            </form>
+            <div id="goals-list" class="space-y-5"></div>
           </div>
 
           <!-- AI Insight Cards -->
@@ -2934,6 +2956,7 @@
       'aifp.catOverrides', 'aifp.customCats', 'aifp.cash', 'aifp.matches',
       'aifp.subs', 'aifp.instNotes', 'aifp.budgets', 'aifp.recurring',
       'aifp.cycleStart', 'aifp.theme', 'aifp.prefs', 'aifp.dataStart',
+      'aifp.goals',
     ];
 
     const durable = {
@@ -3837,8 +3860,13 @@
         };
         const byCycle = {};
         everyCycle.forEach(t => (byCycle[cycleOf(t.date)] ||= []).push(t));
+        const partialKeys = new Set((months.coverage().partial || []).map(x => x.key));
         const series = Object.keys(byCycle).sort().map(k => ({
           key: k, label: cycleLabel(k), ...cycleFigures(byCycle[k]),
+          cats: categoryTotals(byCycle[k]),
+          // Statements stop part-way through this cycle: its totals are low
+          // by whatever was not imported yet, so it must not set a pace.
+          partial: partialKeys.has(k),
         }));
 
         const spendBy = (rows, keyFn) => {
@@ -3871,7 +3899,15 @@
           subscriptions: { count: subList.length,
                            monthly: subList.reduce((s, x) => s + perMonth(x), 0) },
           currency: (window.__cur || {}).code || 'TRY',
+          // For the goal coach: the latest real charges, newest first.
+          recent: everyCycle.filter(t => (t.flow || 'real') === 'real' && t.type === 'expense' && !t._adjustment)
+            .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 80)
+            .map(t => ({ date: t.date, merchant: t.merchant, amount: Math.abs(t.amount), category: t.category })),
         };
+        // The goal coach lives in its own <script> block; it saves through
+        // the same durable store as every other decision.
+        window.__persistGoals = list => store.set('aifp.goals', list);
+        window.dispatchEvent(new Event('aifp:data'));
       }
 
       // ── quick stats on the Transactions view ──
@@ -8695,6 +8731,172 @@
       </div>
     </div>
   </div>
+
+  <!-- ─────────────── GOAL COACH ─────────────── -->
+  <script>
+  (function () {
+    const KEY = 'aifp.goals';
+    const DAY = 86400000;
+    // Not something a person can decide to spend less on this month.
+    const FIXED = new Set(['Fixed Costs', 'House Rent', 'Rent', 'Kira', 'Faturalar', 'Utilities',
+                           'Health', 'Sağlık', 'Income', 'Unknown', 'Investment', 'Transfer']);
+    const CUT_SHARE = 0.25;
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+      c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const money = n => '₺' + Math.round(Math.abs(n)).toLocaleString('tr-TR');
+    const round50 = n => Math.max(50, Math.round(n / 50) * 50);
+    const fmtDate = t => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
+    const picked = {};                       // goal id -> Set of categories, this session
+
+    function save(list) {
+      if (window.__persistGoals) window.__persistGoals(list);
+      else try { localStorage.setItem(KEY, JSON.stringify(list)); } catch {}
+      render();
+    }
+
+    // Everything here comes from the dashboard's own per-cycle figures, so the
+    // coach and the cash-flow card can never disagree about what was saved.
+    function stats() {
+      const d = window.__reportData;
+      if (!d || !d.series || !d.series.length) return null;
+      // A half-imported cycle looks cheap on spending and rich on saving —
+      // pacing a goal off it promised an iPhone in 58 days that was really
+      // 124. Only whole cycles count, unless there are none yet.
+      const whole = d.series.filter(s => !s.partial);
+      const base = whole.length ? whole : d.series;
+      const n = base.length;
+      const pace = base.reduce((a, s) => a + s.net, 0) / n;               // per cycle ≈ per month
+      const partialNote = whole.length && whole.length < d.series.length
+        ? d.series.filter(s => s.partial).map(s => s.label).join(', ') : null;
+      const names = new Set();
+      base.forEach(s => Object.entries(s.cats || {}).forEach(([c, v]) => { if (v > 0 && !FIXED.has(c)) names.add(c); }));
+      const cats = [...names].map(c => {
+        const per = base.map(s => Math.max(0, (s.cats || {})[c] || 0));
+        const avg = per.reduce((a, b) => a + b, 0) / n;
+        const peakAt = per.indexOf(Math.max(...per));
+        // "Above your other cycles" needs at least two whole cycles to compare.
+        const others = n > 1 ? (per.reduce((a, b) => a + b, 0) - per[peakAt]) / (n - 1) : null;
+        const jump = others ? (per[peakAt] - others) / others : null;
+        return { c, avg, cut: round50(avg * CUT_SHARE), peak: per[peakAt],
+                 peakLabel: base[peakAt].label, jump };
+      }).filter(x => x.avg >= 200).sort((a, b) => b.avg - a.avg).slice(0, 5);
+      const last = d.recent && d.recent[0] ? Date.parse(d.recent[0].date) : Date.now();
+      const recent = (d.recent || []).filter(t => !FIXED.has(t.category) && t.amount >= 250
+        && last - Date.parse(t.date) <= 30 * DAY).sort((a, b) => b.amount - a.amount).slice(0, 5);
+      return { pace, n, cats, recent, partialNote };
+    }
+
+    const daysFor = (amount, perMonth) => perMonth > 0 ? Math.ceil(amount / (perMonth / 30)) : Infinity;
+
+    function goalCard(g, st) {
+      const left = Math.max(0, g.price - (g.saved || 0));
+      const pct = Math.min(100, Math.round((g.saved || 0) / g.price * 100));
+      const sel = picked[g.id] || (picked[g.id] = new Set());
+      const extra = st ? st.cats.filter(x => sel.has(x.c)).reduce((a, x) => a + x.cut, 0) : 0;
+      const pace = st ? st.pace : 0;
+      const base = daysFor(left, pace), withCuts = daysFor(left, pace + extra);
+      const since = Math.floor((Date.now() - g.created) / DAY);
+      const done = left === 0;
+      const dayTxt = d => d === Infinity ? '—' : d.toLocaleString('tr-TR');
+      const head = done ? `<span class="text-emerald-400 font-bold">Reached — go get it.</span>`
+        : base === Infinity && withCuts === Infinity
+          ? `<span class="text-amber-400">Your statements show no net saving yet — pick cuts below to open a path.</span>`
+          : `At your pace: <b class="text-white">${dayTxt(base)} days</b>` +
+            (base !== Infinity ? ` · ${fmtDate(Date.now() + base * DAY)}` : '') +
+            (extra ? ` &nbsp;→&nbsp; with cuts: <b class="text-emerald-400">${dayTxt(withCuts)} days</b>` +
+                     (base !== Infinity ? ` <span class="text-emerald-400/80">(${dayTxt(base - withCuts)} sooner)</span>` : '') : '');
+
+      const cutRows = st && !done ? st.cats.map(x => {
+        const gain = base === Infinity ? null : base - daysFor(left, pace + x.cut);
+        const hot = x.jump !== null && x.jump > 0.2;
+        return `<label class="flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 cursor-pointer">
+          <input type="checkbox" data-cut="${esc(x.c)}" data-goal="${g.id}" ${sel.has(x.c) ? 'checked' : ''} class="mt-1 accent-emerald-500">
+          <span class="flex-1 min-w-0">
+            <span class="flex flex-wrap items-center gap-2 text-sm text-white font-semibold">${esc(x.c)}
+              ${hot ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold">▲ ${Math.round(x.jump * 100)}% above your other cycles in ${esc(x.peakLabel)}</span>` : ''}</span>
+            <span class="block text-xs text-slate-400 mt-0.5">Avg ${money(x.avg)} / cycle · spend ${money(x.cut)} less a month</span>
+          </span>
+          <span class="text-right text-sm font-bold text-emerald-400 whitespace-nowrap">${gain ? `−${dayTxt(gain)} days` : `+${money(x.cut)}/mo`}</span>
+        </label>`;
+      }).join('') : '';
+
+      const slowRows = st && !done && pace > 0 ? st.recent.map(t => `
+        <div class="flex items-center justify-between gap-3 py-2 border-b border-slate-800/70 last:border-0">
+          <span class="min-w-0"><span class="block text-sm text-slate-200 truncate">${esc(t.merchant)}</span>
+            <span class="text-[11px] text-slate-500">${esc(t.category)} · ${fmtDate(t.date)} · ${money(t.amount)}</span></span>
+          <span class="text-sm font-bold text-red-400 whitespace-nowrap">+${dayTxt(daysFor(t.amount, pace))} days</span>
+        </div>`).join('') : '';
+
+      return `<div class="rounded-2xl border ${done ? 'border-emerald-500/50' : 'border-slate-700/60'} p-5 bg-slate-900/30">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div><p class="text-lg font-bold text-white">${esc(g.name)}</p>
+            <p class="text-xs text-slate-500">${money(g.price)} · set ${since === 0 ? 'today' : since + ' day' + (since === 1 ? '' : 's') + ' ago'}</p></div>
+          <div class="flex items-center gap-2">
+            <input type="number" min="1" placeholder="₺" data-addamt="${g.id}" class="w-24 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+            <button data-add="${g.id}" class="px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-xs font-semibold">Put aside</button>
+            <button data-del="${g.id}" title="Remove goal" class="px-2.5 py-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 text-xs"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="mt-4">
+          <div class="flex justify-between text-xs mb-1.5"><span class="text-slate-300 font-semibold">${money(g.saved || 0)} saved</span>
+            <span class="text-slate-500">${pct}% · ${money(left)} to go</span></div>
+          <div class="h-3 rounded-full bg-slate-800 overflow-hidden"><div class="h-full rounded-full bg-emerald-500 transition-all duration-700" style="width:${pct}%"></div></div>
+          <p class="text-sm text-slate-400 mt-3">${head}</p>
+        </div>
+        ${cutRows ? `<p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mt-5 mb-2">Get there sooner — tick what you'd cut</p><div class="grid grid-cols-1 lg:grid-cols-2 gap-2">${cutRows}</div>` : ''}
+        ${slowRows ? `<p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mt-5 mb-1">What pushed it back — your latest charges</p><div>${slowRows}</div>` : ''}
+      </div>`;
+    }
+
+    function render() {
+      const list = document.getElementById('goals-list');
+      if (!list) return;
+      const st = stats(), goals = load();
+      const paceEl = document.getElementById('goal-pace');
+      if (paceEl && st) {
+        paceEl.innerHTML = st.pace > 0
+          ? `Your statements show you keep about <b class="text-slate-300">${money(st.pace)} a month</b> (${st.n} complete cycle${st.n === 1 ? '' : 's'}` +
+            (st.partialNote ? `; ${esc(st.partialNote)} is still partly imported and left out)` : ')') + '.'
+          : `Your statements show more going out than coming in — the coach will look for cuts.`;
+      }
+      list.innerHTML = goals.length ? goals.map(g => goalCard(g, st)).join('')
+        : `<p class="text-sm text-slate-500">No goal yet. Add something you want to buy and see how many days it is away.</p>`;
+    }
+
+    document.getElementById('goal-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const name = document.getElementById('goal-name').value.trim();
+      const price = Number(document.getElementById('goal-price').value);
+      const saved = Number(document.getElementById('goal-saved').value) || 0;
+      if (!name || !(price > 0)) return;
+      save([...load(), { id: 'g' + Date.now(), name, price, saved: Math.min(saved, price), created: Date.now() }]);
+      e.target.reset();
+    });
+
+    document.getElementById('goals-list')?.addEventListener('click', e => {
+      const add = e.target.closest('[data-add]'), del = e.target.closest('[data-del]');
+      if (add) {
+        const id = add.dataset.add, inp = document.querySelector(`[data-addamt="${id}"]`);
+        const amt = Number(inp && inp.value);
+        if (!(amt > 0)) { inp && inp.focus(); return; }
+        save(load().map(g => g.id === id ? { ...g, saved: Math.min(g.price, (g.saved || 0) + amt) } : g));
+      } else if (del) {
+        save(load().filter(g => g.id !== del.dataset.del));
+      }
+    });
+    document.getElementById('goals-list')?.addEventListener('change', e => {
+      const cb = e.target.closest('[data-cut]');
+      if (!cb) return;
+      const set = picked[cb.dataset.goal] || (picked[cb.dataset.goal] = new Set());
+      cb.checked ? set.add(cb.dataset.cut) : set.delete(cb.dataset.cut);
+      render();
+    });
+
+    window.addEventListener('aifp:data', render);
+    render();
+  })();
+  </script>
 
   <!-- ─────────────── EXECUTIVE REPORT ─────────────── -->
   <script>
